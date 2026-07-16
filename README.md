@@ -2,6 +2,34 @@
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
+## XAMPP MySQL setup
+
+1. Start **Apache** and **MySQL** in the XAMPP Control Panel.
+
+2. Open phpMyAdmin:
+
+   ```text
+   http://localhost/phpmyadmin
+   ```
+
+3. Import the migration file:
+
+   ```text
+   database/migrations/001_create_jhopping_database.sql
+   ```
+
+   This creates the MySQL database named `jhopping` and a starter `users` table.
+
+4. Check the database connection in your browser:
+
+   ```text
+   http://localhost/J-Hopping/api/health.php
+   ```
+
+The PHP database settings are in `api/config.php`. XAMPP usually uses username `root` and an empty password by default.
+
+For Expo running on a physical phone, replace `localhost` in `app/lib/api.ts` with your computer's local IP address, for example `http://192.168.1.10/J-Hopping/api`.
+
 ## Get started
 
 1. Install dependencies
