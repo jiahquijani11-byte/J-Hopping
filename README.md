@@ -18,7 +18,8 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    database/migrations/001_create_jhopping_database.sql
    ```
 
-   This creates the MySQL database named `jhopping` and a starter `users` table.
+   This creates the MySQL database named `jhopping` with normalized auth tables:
+   `users`, `user_personal_information`, and `user_contact_information`.
 
 4. Check the database connection in your browser:
 
@@ -28,7 +29,14 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 
 The PHP database settings are in `api/config.php`. XAMPP usually uses username `root` and an empty password by default.
 
-For Expo running on a physical phone, replace `localhost` in `app/lib/api.ts` with your computer's local IP address, for example `http://192.168.1.10/J-Hopping/api`.
+Signup and login use these API endpoints:
+
+```text
+http://localhost/J-Hopping/api/signup.php
+http://localhost/J-Hopping/api/login.php
+```
+
+For Expo running on a physical phone, replace `localhost` in `lib/api.ts` with your computer's local IP address, for example `http://192.168.1.10/J-Hopping/api`.
 
 ## Get started
 
