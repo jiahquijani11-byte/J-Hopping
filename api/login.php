@@ -52,17 +52,19 @@ try {
             users.id,
             users.email,
             users.username,
+            users.role,
             users.password_hash,
             user_personal_information.first_name,
             user_personal_information.last_name
          FROM users
          LEFT JOIN user_personal_information
             ON user_personal_information.user_id = users.id
-         WHERE users.email = :identifier OR users.username = :identifier
+         WHERE users.email = :email OR users.username = :username
          LIMIT 1'
     );
     $statement->execute([
-        'identifier' => $identifier,
+        'email' => $identifier,
+        'username' => $identifier,
     ]);
 
     $user = $statement->fetch();
@@ -83,6 +85,7 @@ try {
             'lastName' => $user['last_name'],
             'email' => $user['email'],
             'username' => $user['username'],
+            'role' => $user['role'],
         ],
     ]);
 } catch (Throwable $exception) {

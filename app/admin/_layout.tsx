@@ -1,21 +1,59 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
+import { AppTabBar } from "../../components/AppTabBar";
 
 export default function AdminTabsLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "#111827",
-        tabBarInactiveTintColor: "#667085",
+        tabBarActiveTintColor: "#ffffff",
+        tabBarInactiveTintColor: "#8a94a6",
       }}
+      tabBar={(props) => <AppTabBar {...props} />}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: "Admin",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons color={color} name="shield-checkmark-outline" size={size} />
+          title: "Home",
+          tabBarIcon: ({ focused, color, size }) => (
+            <Ionicons color={color} name={focused ? "home" : "home-outline"} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="users"
+        options={{
+          title: "Users",
+          tabBarIcon: ({ focused, color, size }) => (
+            <Ionicons color={color} name={focused ? "people" : "people-outline"} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="bookings"
+        options={{
+          title: "Bookings",
+          tabBarIcon: ({ focused, color, size }) => (
+            <Ionicons color={color} name={focused ? "calendar" : "calendar-outline"} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="reports"
+        options={{
+          title: "Reports",
+          tabBarIcon: ({ focused, color, size }) => (
+            <Ionicons color={color} name={focused ? "bar-chart" : "bar-chart-outline"} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: "Settings",
+          tabBarIcon: ({ focused, color, size }) => (
+            <Ionicons color={color} name={focused ? "settings" : "settings-outline"} size={size} />
           ),
         }}
       />
