@@ -1,33 +1,38 @@
 import { Ionicons } from "@expo/vector-icons";
-import { ImageBackground, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import { ImageBackground, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "../../lib/auth-context";
+import { LogoutModal } from "../../components/LogoutModal";
 
-export default function UserHome() {
-  const { user } = useAuth();
-  const firstName = user?.firstName ?? "there";
+export default function AdminSettings() {
+  const [showLogout, setShowLogout] = useState(false);
 
   return (
     <View style={styles.container}>
       <ImageBackground
         imageStyle={styles.backgroundImage}
         resizeMode="cover"
-        source={require("../../assets/images/corousel12.png")}
+        source={require("../../assets/images/corousel11.png")}
         style={styles.background}
       >
         <View style={styles.overlay} />
         <SafeAreaView style={styles.content}>
           <View style={styles.card}>
             <View style={styles.iconCircle}>
-              <Ionicons color="#111827" name="person-circle" size={44} />
+              <Ionicons color="#111827" name="settings" size={40} />
             </View>
-            <Text style={styles.title}>User Dashboard</Text>
-            <Text style={styles.subtitle}>
-              Welcome back, {firstName}! Explore new stops and plan your next trip.
-            </Text>
+            <Text style={styles.title}>Settings</Text>
+            <Text style={styles.subtitle}>Configure your application preferences.</Text>
+
+            <Pressable onPress={() => setShowLogout(true)} style={styles.logoutButton}>
+              <Ionicons color="#ffffff" name="log-out-outline" size={20} />
+              <Text style={styles.logoutText}>Logout</Text>
+            </Pressable>
           </View>
         </SafeAreaView>
       </ImageBackground>
+
+      <LogoutModal visible={showLogout} onClose={() => setShowLogout(false)} />
     </View>
   );
 }
@@ -88,5 +93,21 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginTop: 8,
     textAlign: "center",
+  },
+  logoutButton: {
+    alignItems: "center",
+    backgroundColor: "#dc2626",
+    borderRadius: 8,
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "center",
+    marginTop: 22,
+    minHeight: 50,
+    width: "100%",
+  },
+  logoutText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "800",
   },
 });

@@ -59,5 +59,17 @@ export async function signupUser(payload: SignupPayload) {
 }
 
 export async function loginUser(payload: { identifier: string; password: string }) {
-  return postJson("login.php", payload);
+  const data = await postJson("login.php", payload);
+  return data as {
+    ok: true;
+    message: string;
+    data: {
+      id: number;
+      firstName: string | null;
+      lastName: string | null;
+      email: string;
+      username: string;
+      role: "user" | "admin";
+    };
+  };
 }

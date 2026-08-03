@@ -1,3 +1,6 @@
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
@@ -56,31 +59,22 @@ const initialForm: SignupForm = {
   confirmPassword: "",
 };
 
-const formatDate = (year: number, month: number, day: number) =>
-  `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+const toISODate = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate(),
+  ).padStart(2, "0")}`;
 
-const getNextDatePart = (
-  part: "year" | "month" | "day",
-  value: number,
-  direction: 1 | -1,
-) => {
-  const ranges = {
-    year: { min: 1900, max: new Date().getFullYear() },
-    month: { min: 1, max: 12 },
-    day: { min: 1, max: 31 },
-  };
-  const range = ranges[part];
-  const nextValue = value + direction;
+const isValidISODate = (value: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
 
-  if (nextValue > range.max) {
-    return range.min;
-  }
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
 
-  if (nextValue < range.min) {
-    return range.max;
-  }
-
-  return nextValue;
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
 };
 
 export default function Signup() {
@@ -91,7 +85,8 @@ export default function Signup() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [dateParts, setDateParts] = useState({ year: 2000, month: 1, day: 1 });
+  const [birthDateValue, setBirthDateValue] = useState(new Date(2000, 0, 1));
+  const [webDateInput, setWebDateInput] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -119,7 +114,11 @@ export default function Signup() {
     if (targetStep === 1) {
       if (!form.firstName.trim()) nextErrors.firstName = "Firstname is required.";
       if (!form.lastName.trim()) nextErrors.lastName = "Lastname is required.";
-      if (!form.birthDate.trim()) nextErrors.birthDate = "Birth date is required.";
+      if (!form.birthDate.trim()) {
+        nextErrors.birthDate = "Birth date is required.";
+      } else if (!isValidISODate(form.birthDate)) {
+        nextErrors.birthDate = "Enter a valid birth date.";
+      }
       if (!form.birthPlace.trim()) nextErrors.birthPlace = "Birth place is required.";
     }
 
@@ -215,9 +214,46 @@ export default function Signup() {
     }
   };
 
+  const handleDatePickerChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    if (Platform.OS === "android") {
+      setShowDatePicker(false);
+
+      if (event.type === "set" && selectedDate) {
+        setBirthDateValue(selectedDate);
+        updateField("birthDate", toISODate(selectedDate));
+      }
+
+      return;
+    }
+
+    if (event.type === "set" && selectedDate) {
+      setBirthDateValue(selectedDate);
+    }
+  };
+
   const confirmBirthDate = () => {
-    updateField("birthDate", formatDate(dateParts.year, dateParts.month, dateParts.day));
+    updateField("birthDate", toISODate(birthDateValue));
     setShowDatePicker(false);
+  };
+
+  const handleWebDateChange = (text: string) => {
+    const digits = text.replace(/\D/g, "").slice(0, 8);
+    const parts: string[] = [];
+
+    if (digits.length > 0) parts.push(digits.slice(0, 2));
+    if (digits.length > 2) parts.push(digits.slice(2, 4));
+    if (digits.length > 4) parts.push(digits.slice(4, 8));
+
+    setWebDateInput(parts.join("/"));
+
+    if (digits.length === 8) {
+      updateField(
+        "birthDate",
+        `${digits.slice(4, 8)}-${digits.slice(0, 2)}-${digits.slice(2, 4)}`,
+      );
+    } else if (form.birthDate) {
+      updateField("birthDate", "");
+    }
   };
 
   const renderField = (
@@ -278,15 +314,28 @@ export default function Signup() {
   const renderDateField = () => (
     <View style={styles.field}>
       <Text style={styles.label}>Birth Date</Text>
-      <Pressable
-        onPress={() => setShowDatePicker(true)}
-        style={[styles.inputShell, errors.birthDate && styles.inputError]}
-      >
-        <Ionicons color="#667085" name="calendar-outline" size={19} style={styles.fieldIcon} />
-        <Text style={[styles.dateText, !form.birthDate && styles.placeholderText]}>
-          {form.birthDate || "Select birth date"}
-        </Text>
-      </Pressable>
+      {Platform.OS === "web" ? (
+        <View style={[styles.inputShell, errors.birthDate && styles.inputError]}>
+          <Ionicons color="#667085" name="calendar-outline" size={19} style={styles.fieldIcon} />
+          <TextInput
+            onChangeText={handleWebDateChange}
+            placeholder="MM/DD/YYYY"
+            placeholderTextColor="#8a94a6"
+            style={styles.input}
+            value={webDateInput}
+          />
+        </View>
+      ) : (
+        <Pressable
+          onPress={() => setShowDatePicker(true)}
+          style={[styles.inputShell, errors.birthDate && styles.inputError]}
+        >
+          <Ionicons color="#667085" name="calendar-outline" size={19} style={styles.fieldIcon} />
+          <Text style={[styles.dateText, !form.birthDate && styles.placeholderText]}>
+            {form.birthDate || "Select birth date"}
+          </Text>
+        </Pressable>
+      )}
       {errors.birthDate ? <Text style={styles.errorText}>{errors.birthDate}</Text> : null}
     </View>
   );
@@ -397,40 +446,27 @@ export default function Signup() {
         </SafeAreaView>
       </ImageBackground>
 
-      <Modal transparent visible={showDatePicker} animationType="fade">
+      {showDatePicker && Platform.OS === "android" ? (
+        <DateTimePicker
+          display="calendar"
+          maximumDate={new Date()}
+          mode="date"
+          onChange={handleDatePickerChange}
+          value={birthDateValue}
+        />
+      ) : null}
+
+      <Modal transparent visible={showDatePicker && Platform.OS === "ios"} animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={styles.dateModal}>
             <Text style={styles.dateTitle}>Select Birth Date</Text>
-            <View style={styles.dateRows}>
-              {(["year", "month", "day"] as const).map((part) => (
-                <View key={part} style={styles.dateColumn}>
-                  <Text style={styles.dateLabel}>{part}</Text>
-                  <Pressable
-                    onPress={() =>
-                      setDateParts((current) => ({
-                        ...current,
-                        [part]: getNextDatePart(part, current[part], 1),
-                      }))
-                    }
-                    style={styles.dateButton}
-                  >
-                    <Ionicons color="#111827" name="chevron-up-outline" size={22} />
-                  </Pressable>
-                  <Text style={styles.dateValue}>{dateParts[part]}</Text>
-                  <Pressable
-                    onPress={() =>
-                      setDateParts((current) => ({
-                        ...current,
-                        [part]: getNextDatePart(part, current[part], -1),
-                      }))
-                    }
-                    style={styles.dateButton}
-                  >
-                    <Ionicons color="#111827" name="chevron-down-outline" size={22} />
-                  </Pressable>
-                </View>
-              ))}
-            </View>
+            <DateTimePicker
+              display="spinner"
+              maximumDate={new Date()}
+              mode="date"
+              onChange={handleDatePickerChange}
+              value={birthDateValue}
+            />
             <View style={styles.modalActions}>
               <Pressable onPress={() => setShowDatePicker(false)} style={styles.cancelDateButton}>
                 <Text style={styles.cancelDateText}>Cancel</Text>
@@ -633,35 +669,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginBottom: 16,
     textAlign: "center",
-  },
-  dateRows: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  dateColumn: {
-    alignItems: "center",
-    flex: 1,
-  },
-  dateLabel: {
-    color: "#475467",
-    fontSize: 12,
-    fontWeight: "800",
-    marginBottom: 8,
-    textTransform: "capitalize",
-  },
-  dateButton: {
-    alignItems: "center",
-    backgroundColor: "#f2f4f7",
-    borderRadius: 8,
-    height: 38,
-    justifyContent: "center",
-    width: "100%",
-  },
-  dateValue: {
-    color: "#111827",
-    fontSize: 18,
-    fontWeight: "800",
-    paddingVertical: 10,
   },
   modalActions: {
     flexDirection: "row",

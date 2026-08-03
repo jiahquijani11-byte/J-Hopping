@@ -1,30 +1,40 @@
 import { Ionicons } from "@expo/vector-icons";
-import { ImageBackground, StyleSheet, Text, View } from "react-native";
+import {
+  ImageBackground,
+  type ImageSourcePropType,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "../../lib/auth-context";
 
-export default function UserHome() {
-  const { user } = useAuth();
-  const firstName = user?.firstName ?? "there";
+type PlaceholderScreenProps = {
+  image: ImageSourcePropType;
+  title: string;
+  subtitle: string;
+  icon: keyof typeof Ionicons.glyphMap;
+};
 
+export function PlaceholderScreen({ image, subtitle, icon, title }: PlaceholderScreenProps) {
   return (
     <View style={styles.container}>
       <ImageBackground
         imageStyle={styles.backgroundImage}
         resizeMode="cover"
-        source={require("../../assets/images/corousel12.png")}
+        source={image}
         style={styles.background}
       >
         <View style={styles.overlay} />
         <SafeAreaView style={styles.content}>
           <View style={styles.card}>
             <View style={styles.iconCircle}>
-              <Ionicons color="#111827" name="person-circle" size={44} />
+              <Ionicons color="#111827" name={icon} size={40} />
             </View>
-            <Text style={styles.title}>User Dashboard</Text>
-            <Text style={styles.subtitle}>
-              Welcome back, {firstName}! Explore new stops and plan your next trip.
-            </Text>
+            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.subtitle}>{subtitle}</Text>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>Coming soon</Text>
+            </View>
           </View>
         </SafeAreaView>
       </ImageBackground>
@@ -88,5 +98,17 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginTop: 8,
     textAlign: "center",
+  },
+  badge: {
+    backgroundColor: "#111827",
+    borderRadius: 999,
+    marginTop: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  badgeText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "800",
   },
 });
