@@ -80,8 +80,6 @@ const styles = StyleSheet.create({
   bar: {
     alignItems: "flex-start",
     backgroundColor: "rgba(11, 18, 32, 0.96)",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
     boxShadow: "0 -6px 20px rgba(0, 0, 0, 0.28)",
     flexDirection: "row",
     paddingHorizontal: 8,
