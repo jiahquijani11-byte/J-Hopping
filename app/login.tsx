@@ -96,7 +96,7 @@ export default function Login() {
               <View style={styles.card}>
                 <Text style={styles.sectionTitle}>Login</Text>
                 <Text style={styles.sectionHint}>
-                  We&apos;ll detect whether you&apos;re a user or admin.
+                  Start your next adventure here!
                 </Text>
 
                 <TextInput
@@ -139,7 +139,7 @@ export default function Login() {
                   {isSigningIn ? (
                     <ActivityIndicator color="#ffffff" />
                   ) : (
-                    <Text style={styles.buttonText}>Login</Text>
+                    <Text style={styles.buttonText}>Sign in</Text>
                   )}
                 </Pressable>
 

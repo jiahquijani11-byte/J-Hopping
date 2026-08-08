@@ -1,5 +1,5 @@
 import { Stack } from "expo-router";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Image, StyleSheet, View } from "react-native";
 import { AuthProvider, useAuth } from "../lib/auth-context";
 
 function RootNavigator() {
@@ -8,6 +8,7 @@ function RootNavigator() {
   if (status === "loading") {
     return (
       <View style={styles.loadingContainer}>
+        <Image source={require("../assets/images/icon.png")} style={styles.loadingLogo} />
         <ActivityIndicator color="#ffffff" size="large" />
       </View>
     );
@@ -49,5 +50,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#111827",
     flex: 1,
     justifyContent: "center",
+  },
+  loadingLogo: {
+    height: 120,
+    marginBottom: 24,
+    resizeMode: "contain",
+    width: 120,
   },
 });
