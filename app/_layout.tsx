@@ -1,5 +1,6 @@
 import { Stack } from "expo-router";
 import { ActivityIndicator, Image, StyleSheet, View } from "react-native";
+import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "../lib/auth-context";
 
 function RootNavigator() {
@@ -38,9 +39,11 @@ function RootNavigator() {
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <RootNavigator />
-    </AuthProvider>
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+      <AuthProvider>
+        <RootNavigator />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
 

@@ -8,7 +8,7 @@ export type AuthUser = {
   lastName: string | null;
   email: string;
   username: string;
-  role: "user" | "admin";
+  role: "user" | "admin" | "manager";
 };
 
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";

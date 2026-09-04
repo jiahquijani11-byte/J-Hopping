@@ -55,10 +55,14 @@ try {
             users.role,
             users.password_hash,
             user_personal_information.first_name,
-            user_personal_information.last_name
+            user_personal_information.last_name,
+            destination_managers.first_name AS manager_first_name,
+            destination_managers.last_name AS manager_last_name
          FROM users
          LEFT JOIN user_personal_information
             ON user_personal_information.user_id = users.id
+         LEFT JOIN destination_managers
+            ON destination_managers.user_id = users.id
          WHERE users.email = :email OR users.username = :username
          LIMIT 1'
     );
@@ -81,8 +85,8 @@ try {
         'message' => 'Signed in successfully.',
         'data' => [
             'id' => $user['id'],
-            'firstName' => $user['first_name'],
-            'lastName' => $user['last_name'],
+            'firstName' => $user['first_name'] ?? $user['manager_first_name'],
+            'lastName' => $user['last_name'] ?? $user['manager_last_name'],
             'email' => $user['email'],
             'username' => $user['username'],
             'role' => $user['role'],
