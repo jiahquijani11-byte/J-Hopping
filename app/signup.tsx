@@ -6,20 +6,29 @@ import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  ImageBackground,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   useWindowDimensions,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { AuthLayout } from "../components/AuthLayout";
 import { signupUser } from "../lib/api";
+import { toTitleCase } from "../lib/text";
+
+const genderOptions = [
+  { label: "Male", value: "male" },
+  { label: "Female", value: "female" },
+  { label: "Bisexual", value: "bisexual" },
+  { label: "Gay", value: "gay" },
+  { label: "Lesbian", value: "lesbian" },
+  { label: "Prefer not to say", value: "prefer_not_to_say" },
+] as const;
+
+type Gender = (typeof genderOptions)[number]["value"];
 
 type SignupForm = {
   firstName: string;
@@ -27,12 +36,9 @@ type SignupForm = {
   lastName: string;
   extensionName: string;
   birthDate: string;
-  birthPlace: string;
+  gender: Gender | "";
   email: string;
   contactNumber: string;
-  city: string;
-  province: string;
-  barangay: string;
   country: string;
   username: string;
   password: string;
@@ -47,12 +53,9 @@ const initialForm: SignupForm = {
   lastName: "",
   extensionName: "",
   birthDate: "",
-  birthPlace: "",
+  gender: "",
   email: "",
   contactNumber: "",
-  city: "",
-  province: "",
-  barangay: "",
   country: "",
   username: "",
   password: "",
@@ -77,14 +80,47 @@ const isValidISODate = (value: string) => {
   );
 };
 
+const formatBirthDate = (value: string) => {
+  if (!isValidISODate(value)) return "Select birth date";
+
+  const [year, month, day] = value.split("-").map(Number);
+
+  return new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(year, month - 1, day));
+};
+
+const calculateAge = (value: string) => {
+  if (!isValidISODate(value)) return null;
+
+  const [year, month, day] = value.split("-").map(Number);
+  const birthDate = new Date(year, month - 1, day);
+  const today = new Date();
+
+  if (birthDate > today) return null;
+
+  let age = today.getFullYear() - year;
+  const birthdayHasNotOccurred =
+    today.getMonth() < month - 1 ||
+    (today.getMonth() === month - 1 && today.getDate() < day);
+
+  if (birthdayHasNotOccurred) age -= 1;
+
+  return age > 0 ? age : null;
+};
+
 export default function Signup() {
-  const { height, width } = useWindowDimensions();
+  const { width, fontScale } = useWindowDimensions();
+  const stackFields = width < 360 || fontScale > 1.2;
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(initialForm);
   const [errors, setErrors] = useState<Partial<Record<FieldName, string>>>({});
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showGenderPicker, setShowGenderPicker] = useState(false);
   const [birthDateValue, setBirthDateValue] = useState(new Date(2000, 0, 1));
   const [webDateInput, setWebDateInput] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -92,14 +128,14 @@ export default function Signup() {
 
   const stepTitle = useMemo(() => {
     if (step === 1) {
-      return "Personal Information";
+      return "Personal details";
     }
 
     if (step === 2) {
-      return "Contact Information";
+      return "Contact details";
     }
 
-    return "Account Security";
+    return "Account details";
   }, [step]);
 
   const updateField = (field: FieldName, value: string) => {
@@ -116,10 +152,10 @@ export default function Signup() {
       if (!form.lastName.trim()) nextErrors.lastName = "Lastname is required.";
       if (!form.birthDate.trim()) {
         nextErrors.birthDate = "Birth date is required.";
-      } else if (!isValidISODate(form.birthDate)) {
+      } else if (!isValidISODate(form.birthDate) || !calculateAge(form.birthDate)) {
         nextErrors.birthDate = "Enter a valid birth date.";
       }
-      if (!form.birthPlace.trim()) nextErrors.birthPlace = "Birth place is required.";
+      if (!form.gender) nextErrors.gender = "Gender is required.";
     }
 
     if (targetStep === 2) {
@@ -132,9 +168,6 @@ export default function Signup() {
       }
 
       if (!form.contactNumber.trim()) nextErrors.contactNumber = "Contact number is required.";
-      if (!form.city.trim()) nextErrors.city = "City is required.";
-      if (!form.province.trim()) nextErrors.province = "Province is required.";
-      if (!form.barangay.trim()) nextErrors.barangay = "Barangay is required.";
       if (!form.country.trim()) nextErrors.country = "Country is required.";
     }
 
@@ -185,12 +218,9 @@ export default function Signup() {
         lastName: form.lastName.trim(),
         extensionName: form.extensionName.trim(),
         birthDate: form.birthDate,
-        birthPlace: form.birthPlace.trim(),
+        gender: form.gender as Gender,
         email: form.email.trim().toLowerCase(),
         contactNumber: form.contactNumber.trim(),
-        city: form.city.trim(),
-        province: form.province.trim(),
-        barangay: form.barangay.trim(),
         country: form.country.trim(),
         username: form.username.trim(),
         password: form.password,
@@ -256,24 +286,41 @@ export default function Signup() {
     }
   };
 
+  const formatFieldValue = (field: FieldName, value: string) => {
+    if (field === "middleInitial") return value.replace(/[^A-Za-z]/g, "").slice(0, 1);
+    if (field === "extensionName") return value.replace(/[^A-Za-z.]/g, "").slice(0, 3);
+    if (field === "firstName" || field === "lastName" || field === "country") {
+      return toTitleCase(value);
+    }
+
+    return value;
+  };
+
+  const renderLabel = (label: string, required = true) => (
+    <Text style={styles.label}>
+      {label}
+      {required ? <Text style={styles.requiredMark}> *</Text> : null}
+    </Text>
+  );
+
   const renderField = (
     field: FieldName,
     label: string,
     placeholder: string,
-    icon: keyof typeof Ionicons.glyphMap,
     options?: {
       autoCapitalize?: "none" | "sentences" | "words" | "characters";
       keyboardType?: "default" | "email-address" | "phone-pad";
     },
   ) => (
     <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
+      {renderLabel(label, field !== "middleInitial" && field !== "extensionName")}
       <View style={[styles.inputShell, errors[field] && styles.inputError]}>
-        <Ionicons color="#667085" name={icon} size={19} style={styles.fieldIcon} />
         <TextInput
+          accessibilityLabel={label}
           autoCapitalize={options?.autoCapitalize}
           keyboardType={options?.keyboardType}
-          onChangeText={(value) => updateField(field, value)}
+          maxLength={field === "middleInitial" ? 1 : field === "extensionName" ? 3 : undefined}
+          onChangeText={(value) => updateField(field, formatFieldValue(field, value))}
           placeholder={placeholder}
           placeholderTextColor="#8a94a6"
           style={styles.input}
@@ -292,9 +339,8 @@ export default function Signup() {
     onToggle: () => void,
   ) => (
     <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
+      {renderLabel(label)}
       <View style={[styles.inputShell, errors[field] && styles.inputError]}>
-        <Ionicons color="#667085" name="lock-closed-outline" size={19} style={styles.fieldIcon} />
         <TextInput
           onChangeText={(value) => updateField(field, value)}
           placeholder={placeholder}
@@ -303,8 +349,8 @@ export default function Signup() {
           style={styles.input}
           value={form[field]}
         />
-        <Pressable accessibilityLabel={visible ? "Hide password" : "Show password"} onPress={onToggle}>
-          <Ionicons color="#111827" name={visible ? "eye-off-outline" : "eye-outline"} size={21} />
+        <Pressable accessibilityLabel={visible ? "Hide password" : "Show password"} onPress={onToggle} style={styles.eyeButton}>
+          <Ionicons color="#666666" name={visible ? "eye-off-outline" : "eye-outline"} size={19} />
         </Pressable>
       </View>
       {errors[field] ? <Text style={styles.errorText}>{errors[field]}</Text> : null}
@@ -313,10 +359,9 @@ export default function Signup() {
 
   const renderDateField = () => (
     <View style={styles.field}>
-      <Text style={styles.label}>Birth Date</Text>
+      {renderLabel("Birth Date")}
       {Platform.OS === "web" ? (
         <View style={[styles.inputShell, errors.birthDate && styles.inputError]}>
-          <Ionicons color="#667085" name="calendar-outline" size={19} style={styles.fieldIcon} />
           <TextInput
             onChangeText={handleWebDateChange}
             placeholder="MM/DD/YYYY"
@@ -324,127 +369,163 @@ export default function Signup() {
             style={styles.input}
             value={webDateInput}
           />
+          <Ionicons color="#666666" name="calendar-outline" size={18} />
         </View>
       ) : (
         <Pressable
+          accessibilityHint="Opens the birth date calendar"
+          accessibilityRole="button"
           onPress={() => setShowDatePicker(true)}
           style={[styles.inputShell, errors.birthDate && styles.inputError]}
         >
-          <Ionicons color="#667085" name="calendar-outline" size={19} style={styles.fieldIcon} />
           <Text style={[styles.dateText, !form.birthDate && styles.placeholderText]}>
-            {form.birthDate || "Select birth date"}
+            {formatBirthDate(form.birthDate)}
           </Text>
+          <Ionicons color="#666666" name="calendar-outline" size={18} />
         </Pressable>
       )}
       {errors.birthDate ? <Text style={styles.errorText}>{errors.birthDate}</Text> : null}
     </View>
   );
 
+  const renderAgeField = () => (
+    <View style={styles.field}>
+      {renderLabel("Age", false)}
+      <View style={styles.disabledInputShell}>
+        <Text style={[styles.dateText, !form.birthDate && styles.placeholderText]}>
+          {calculateAge(form.birthDate)?.toString() ?? "Calculated from birth date"}
+        </Text>
+      </View>
+    </View>
+  );
+
+  const renderGenderField = () => {
+    const selectedGender = genderOptions.find((option) => option.value === form.gender);
+
+    return (
+      <View style={styles.field}>
+        {renderLabel("Gender")}
+        <Pressable
+          accessibilityHint="Opens the gender selection"
+          accessibilityRole="button"
+          onPress={() => setShowGenderPicker(true)}
+          style={[styles.inputShell, errors.gender && styles.inputError]}
+        >
+          <Text style={[styles.dateText, !selectedGender && styles.placeholderText]}>
+            {selectedGender?.label ?? "Select gender"}
+          </Text>
+          <Ionicons color="#666666" name="chevron-down-outline" size={18} />
+        </Pressable>
+        {errors.gender ? <Text style={styles.errorText}>{errors.gender}</Text> : null}
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
-      <ImageBackground
-        imageStyle={styles.backgroundImage}
-        resizeMode="cover"
-        source={require("../assets/images/corousel11.png")}
-        style={[styles.background, { height, width }]}
+      <AuthLayout
+        title="Create account"
+        subtitle={step === 1 ? "Tell us who you are." : step === 2 ? "Where can we reach you?" : "Secure your account."}
       >
-        <View style={styles.overlay} />
-        <SafeAreaView style={styles.safeArea}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
-            style={styles.keyboardView}
-          >
-            <ScrollView
-              contentContainerStyle={styles.scrollContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
-              <View style={styles.card}>
-                <Text style={styles.eyebrow}>Step {step} of 3</Text>
-                <Text style={styles.title}>{stepTitle}</Text>
-
-                {step === 1 ? (
-                  <View style={styles.fields}>
-                    {renderField("firstName", "Firstname", "Enter firstname", "person-outline")}
-                    {renderField("middleInitial", "Middle Initial", "Optional", "text-outline")}
-                    {renderField("lastName", "Lastname", "Enter lastname", "person-outline")}
-                    {renderField("extensionName", "Extension Name", "Optional", "ribbon-outline")}
-                    {renderDateField()}
-                    {renderField("birthPlace", "Birth Place", "Province, City", "location-outline")}
-                  </View>
-                ) : null}
-
-                {step === 2 ? (
-                  <View style={styles.fields}>
-                    {renderField("email", "Email Address", "Enter email address", "mail-outline", {
-                      autoCapitalize: "none",
-                      keyboardType: "email-address",
-                    })}
-                    {renderField("contactNumber", "Contact Number", "Enter contact number", "call-outline", {
-                      keyboardType: "phone-pad",
-                    })}
-                    {renderField("city", "City", "Enter city", "business-outline")}
-                    {renderField("province", "Province", "Enter province", "map-outline")}
-                    {renderField("barangay", "Barangay", "Enter barangay", "home-outline")}
-                    {renderField("country", "Country", "Enter country", "earth-outline")}
-                  </View>
-                ) : null}
-
-                {step === 3 ? (
-                  <View style={styles.fields}>
-                    {renderField("username", "Username", "Choose username", "at-outline", {
-                      autoCapitalize: "none",
-                    })}
-                    {renderPasswordField("password", "Password", "Create password", showPassword, () =>
-                      setShowPassword((current) => !current),
-                    )}
-                    {renderPasswordField(
-                      "confirmPassword",
-                      "Confirm Password",
-                      "Repeat password",
-                      showConfirmPassword,
-                      () => setShowConfirmPassword((current) => !current),
-                    )}
-                  </View>
-                ) : null}
-
-                {formError ? <Text style={styles.formError}>{formError}</Text> : null}
-
-                <View style={styles.actions}>
-                  {step > 1 ? (
-                    <Pressable
-                      disabled={isSaving}
-                      onPress={() => setStep((currentStep) => currentStep - 1)}
-                      style={styles.secondaryButton}
-                    >
-                      <Text style={styles.secondaryButtonText}>Back</Text>
-                    </Pressable>
-                  ) : null}
-                  <Pressable
-                    disabled={isSaving}
-                    onPress={step === 3 ? handleSubmit : handleNext}
-                    style={[styles.primaryButton, isSaving && styles.disabledButton]}
-                  >
-                    {isSaving ? (
-                      <ActivityIndicator color="#ffffff" />
-                    ) : (
-                      <Text style={styles.primaryButtonText}>
-                        {step === 3 ? "Create Account" : "Next"}
-                      </Text>
-                    )}
-                  </Pressable>
-                </View>
-
-                <Pressable onPress={() => router.push("/login")} style={styles.loginLink}>
-                  <Text style={styles.loginText}>
-                    Already have an account? <Text style={styles.loginStrong}>Login</Text>
-                  </Text>
-                </Pressable>
+        <View style={styles.card}>
+          <View accessibilityLabel={`Step ${step} of 3`} style={styles.stepDots}>
+            {[1, 2, 3].map((number) => (
+              <View key={number} style={[styles.stepDot, step === number && styles.activeStepDot]} />
+            ))}
+          </View>
+          <Text style={styles.title}>{stepTitle}</Text>
+          {step === 1 ? (
+            <View style={styles.fields}>
+              {renderField("firstName", "Firstname", "Enter firstname")}
+              <View style={[styles.fieldRow, stackFields && styles.stackedRow]}>
+                <View style={styles.column}>{renderField("middleInitial", "Middle Initial", "Optional")}</View>
+                <View style={styles.column}>{renderField("extensionName", "Extension Name", "Optional")}</View>
               </View>
-            </ScrollView>
-          </KeyboardAvoidingView>
-        </SafeAreaView>
-      </ImageBackground>
+              {renderField("lastName", "Lastname", "Enter lastname")}
+              <View style={[styles.fieldRow, stackFields && styles.stackedRow]}>
+                <View style={styles.column}>{renderDateField()}</View>
+                <View style={styles.column}>{renderAgeField()}</View>
+              </View>
+              {renderGenderField()}
+            </View>
+          ) : null}
+
+          {step === 2 ? (
+            <View style={styles.fields}>
+              {renderField("email", "Email Address", "Enter email address", {
+                autoCapitalize: "none",
+                keyboardType: "email-address",
+              })}
+              {renderField("contactNumber", "Contact Number", "Enter contact number", {
+                keyboardType: "phone-pad",
+              })}
+              {renderField("country", "Country", "Enter country")}
+            </View>
+          ) : null}
+
+          {step === 3 ? (
+            <View style={styles.fields}>
+              {renderField("username", "Username", "Choose username", {
+                autoCapitalize: "none",
+              })}
+              {renderPasswordField("password", "Password", "Create password", showPassword, () =>
+                setShowPassword((current) => !current),
+              )}
+              {renderPasswordField(
+                "confirmPassword",
+                "Confirm Password",
+                "Repeat password",
+                showConfirmPassword,
+                () => setShowConfirmPassword((current) => !current),
+              )}
+            </View>
+          ) : null}
+
+          {step === 3 ? (
+            <View style={styles.passwordHint}>
+              <Ionicons color="#A9C9DA" name="information-circle-outline" size={16} />
+              <Text style={styles.hintText}>
+                Use 8+ characters with uppercase, lowercase, number, and special character. Both entries must match.
+              </Text>
+            </View>
+          ) : null}
+
+          {formError ? <Text style={styles.formError}>{formError}</Text> : null}
+
+          <View style={styles.actions}>
+            <Pressable
+              disabled={isSaving}
+              onPress={() => {
+                if (step === 1) router.replace("/login");
+                else setStep((currentStep) => currentStep - 1);
+              }}
+              style={styles.secondaryButton}
+            >
+              <Text style={styles.secondaryButtonText}>Back</Text>
+            </Pressable>
+            <Pressable
+              disabled={isSaving}
+              onPress={step === 3 ? handleSubmit : handleNext}
+              style={[styles.primaryButton, isSaving && styles.disabledButton]}
+            >
+              {isSaving ? (
+                <ActivityIndicator color="#0B4F6C" />
+              ) : (
+                <Text style={styles.primaryButtonText}>
+                  {step === 3 ? "Create Account" : "Next"}
+                </Text>
+              )}
+            </Pressable>
+          </View>
+
+          <Pressable onPress={() => router.push("/login")} style={styles.loginLink}>
+            <Text style={styles.loginText}>
+              Already have an account? <Text style={styles.loginStrong}>Login</Text>
+            </Text>
+          </Pressable>
+
+        </View>
+      </AuthLayout>
 
       {showDatePicker && Platform.OS === "android" ? (
         <DateTimePicker
@@ -461,10 +542,12 @@ export default function Signup() {
           <View style={styles.dateModal}>
             <Text style={styles.dateTitle}>Select Birth Date</Text>
             <DateTimePicker
-              display="spinner"
+              accentColor="#0B4F6C"
+              display="inline"
               maximumDate={new Date()}
               mode="date"
               onChange={handleDatePickerChange}
+              themeVariant="light"
               value={birthDateValue}
             />
             <View style={styles.modalActions}>
@@ -475,6 +558,39 @@ export default function Signup() {
                 <Text style={styles.confirmDateText}>Done</Text>
               </Pressable>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal transparent visible={showGenderPicker} animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.genderModal}>
+            <View style={styles.genderModalHeader}>
+              <Text style={styles.genderTitle}>Select Gender</Text>
+              <Pressable
+                accessibilityLabel="Close gender selection"
+                accessibilityRole="button"
+                onPress={() => setShowGenderPicker(false)}
+                style={styles.genderCloseButton}
+              >
+                <Ionicons color="#111827" name="close" size={22} />
+              </Pressable>
+            </View>
+            {genderOptions.map((option) => (
+              <Pressable
+                key={option.value}
+                onPress={() => {
+                  updateField("gender", option.value);
+                  setShowGenderPicker(false);
+                }}
+                style={styles.genderOption}
+              >
+                <Text style={styles.genderOptionText}>{option.label}</Text>
+                {form.gender === option.value ? (
+                  <Ionicons color="#0B4F6C" name="checkmark" size={20} />
+                ) : null}
+              </Pressable>
+            ))}
           </View>
         </View>
       </Modal>
@@ -492,163 +608,51 @@ export default function Signup() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: "#111827",
-    flex: 1,
-  },
-  background: {
-    backgroundColor: "#111827",
-    flex: 1,
-  },
-  backgroundImage: {
-    backgroundColor: "#111827",
-    height: "100%",
-    width: "100%",
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(11, 18, 32, 0.48)",
-  },
-  safeArea: {
-    flex: 1,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: "center",
-    paddingHorizontal: 18,
-    paddingVertical: 26,
-  },
-  card: {
-    alignSelf: "center",
-    backgroundColor: "#ffffff",
-    borderRadius: 8,
-    boxShadow: "0 10px 24px rgba(0, 0, 0, 0.24)",
-    maxWidth: 560,
-    padding: 18,
-    width: "100%",
-  },
-  eyebrow: {
-    color: "#475467",
-    fontSize: 12,
-    fontWeight: "800",
-    marginBottom: 6,
-    textTransform: "uppercase",
-  },
-  title: {
-    color: "#111827",
-    fontSize: 26,
-    fontWeight: "800",
-    lineHeight: 32,
-    marginBottom: 16,
-  },
-  fields: {
-    gap: 10,
-  },
-  field: {
-    gap: 5,
-  },
-  label: {
-    color: "#111827",
-    fontSize: 13,
-    fontWeight: "800",
-  },
+  container: { backgroundColor: "#0B4F6C", flex: 1 },
+  card: { gap: 14 },
+  stepDots: { flexDirection: "row", gap: 6, alignItems: "center" },
+  stepDot: { height: 4, width: 8, borderRadius: 2, backgroundColor: "#FFFFFF59" },
+  activeStepDot: { width: 22, backgroundColor: "#FFFFFF" },
+  title: { color: "#FFFFFF", fontSize: 22, fontWeight: "600", lineHeight: 28 },
+  fields: { gap: 14 },
+  field: { gap: 6 },
+  fieldRow: { flexDirection: "row", gap: 12 },
+  stackedRow: { flexDirection: "column" },
+  column: { flex: 1, minWidth: 0 },
+  label: { color: "#A9C9DA", fontSize: 10, fontWeight: "600", letterSpacing: 1.2, textTransform: "uppercase" },
+  requiredMark: { color: "#FF8B82" },
   inputShell: {
-    alignItems: "center",
-    backgroundColor: "#ffffff",
-    borderColor: "#d0d5dd",
-    borderRadius: 8,
-    borderWidth: 1.3,
-    flexDirection: "row",
-    minHeight: 46,
-    paddingHorizontal: 12,
+    alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#EEF0F2",
+    borderRadius: 4, borderWidth: 1, flexDirection: "row", minHeight: 46, paddingHorizontal: 14,
   },
-  inputError: {
-    borderColor: "#ef4444",
+  inputError: { borderColor: "#FFB4AB" },
+  disabledInputShell: {
+    alignItems: "center", backgroundColor: "#E8EEF1", borderColor: "#D9E1E6",
+    borderRadius: 4, borderWidth: 1, flexDirection: "row", minHeight: 46, paddingHorizontal: 14,
   },
-  fieldIcon: {
-    marginRight: 9,
-  },
-  input: {
-    color: "#111827",
-    flex: 1,
-    fontSize: 15,
-    minHeight: 44,
-    padding: 0,
-  },
-  dateText: {
-    color: "#111827",
-    flex: 1,
-    fontSize: 15,
-  },
-  placeholderText: {
-    color: "#8a94a6",
-  },
-  errorText: {
-    color: "#dc2626",
-    fontSize: 12,
-    fontWeight: "700",
-    lineHeight: 16,
-  },
-  formError: {
-    color: "#dc2626",
-    fontSize: 13,
-    fontWeight: "800",
-    lineHeight: 18,
-    marginTop: 12,
-    textAlign: "center",
-  },
-  actions: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 16,
-  },
+  input: { color: "#1A1A1A", flex: 1, minWidth: 0, fontSize: 14, minHeight: 44, paddingHorizontal: 0, paddingVertical: 12 },
+  eyeButton: { minHeight: 44, width: 32, alignItems: "flex-end", justifyContent: "center" },
+  dateText: { color: "#1A1A1A", flex: 1, fontSize: 14, paddingVertical: 12 },
+  placeholderText: { color: "#8a94a6" },
+  errorText: { color: "#FFD1CC", fontSize: 12, lineHeight: 17 },
+  formError: { color: "#FFD1CC", fontSize: 13, lineHeight: 18 },
+  passwordHint: { flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: "#FFFFFF1A", borderRadius: 4, padding: 12 },
+  hintText: { flex: 1, color: "#A9C9DA", fontSize: 11, lineHeight: 16 },
+  actions: { flexDirection: "row", gap: 10 },
   primaryButton: {
-    alignItems: "center",
-    backgroundColor: "#111827",
-    borderRadius: 8,
-    flex: 1,
-    justifyContent: "center",
-    minHeight: 48,
+    alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 4,
+    flex: 1, justifyContent: "center", minHeight: 50, paddingHorizontal: 12, paddingVertical: 14,
   },
-  primaryButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "800",
-  },
+  primaryButtonText: { color: "#0B4F6C", fontSize: 15, fontWeight: "600", textAlign: "center" },
   secondaryButton: {
-    alignItems: "center",
-    borderColor: "#111827",
-    borderRadius: 8,
-    borderWidth: 1.3,
-    flex: 1,
-    justifyContent: "center",
-    minHeight: 48,
+    alignItems: "center", borderColor: "#FFFFFF59", borderRadius: 4, borderWidth: 1,
+    flex: 1, justifyContent: "center", minHeight: 50, paddingHorizontal: 12, paddingVertical: 14,
   },
-  secondaryButtonText: {
-    color: "#111827",
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  disabledButton: {
-    opacity: 0.72,
-  },
-  loginLink: {
-    alignItems: "center",
-    marginTop: 14,
-  },
-  loginText: {
-    color: "#475467",
-    fontSize: 14,
-    lineHeight: 21,
-    textAlign: "center",
-  },
-  loginStrong: {
-    color: "#111827",
-    fontWeight: "800",
-  },
+  secondaryButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "600" },
+  disabledButton: { opacity: 0.72 },
+  loginLink: { alignItems: "center", paddingVertical: 6 },
+  loginText: { color: "#A9C9DA", fontSize: 13, lineHeight: 20, textAlign: "center" },
+  loginStrong: { color: "#FFFFFF", fontWeight: "600" },
   modalBackdrop: {
     alignItems: "center",
     backgroundColor: "rgba(0, 0, 0, 0.5)",
@@ -663,6 +667,31 @@ const styles = StyleSheet.create({
     padding: 18,
     width: "100%",
   },
+  genderModal: {
+    backgroundColor: "#ffffff",
+    borderRadius: 8,
+    maxWidth: 380,
+    padding: 18,
+    width: "100%",
+  },
+  genderModalHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  genderTitle: { color: "#111827", fontSize: 20, fontWeight: "800" },
+  genderCloseButton: { alignItems: "center", height: 36, justifyContent: "center", width: 36 },
+  genderOption: {
+    alignItems: "center",
+    borderBottomColor: "#E7ECEF",
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    minHeight: 46,
+    paddingHorizontal: 4,
+  },
+  genderOptionText: { color: "#111827", fontSize: 15 },
   dateTitle: {
     color: "#111827",
     fontSize: 20,

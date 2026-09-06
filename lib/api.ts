@@ -46,12 +46,9 @@ type SignupPayload = {
   lastName: string;
   extensionName: string;
   birthDate: string;
-  birthPlace: string;
+  gender: "male" | "female" | "bisexual" | "gay" | "lesbian" | "prefer_not_to_say";
   email: string;
   contactNumber: string;
-  city: string;
-  province: string;
-  barangay: string;
   country: string;
   username: string;
   password: string;

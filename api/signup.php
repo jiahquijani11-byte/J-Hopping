@@ -52,12 +52,9 @@ if (!is_array($payload)) {
 $firstName = requiredString($payload, 'firstName');
 $lastName = requiredString($payload, 'lastName');
 $birthDate = requiredString($payload, 'birthDate');
-$birthPlace = requiredString($payload, 'birthPlace');
+$gender = requiredString($payload, 'gender');
 $email = strtolower(requiredString($payload, 'email'));
 $contactNumber = requiredString($payload, 'contactNumber');
-$city = requiredString($payload, 'city');
-$province = requiredString($payload, 'province');
-$barangay = requiredString($payload, 'barangay');
 $country = requiredString($payload, 'country');
 $username = requiredString($payload, 'username');
 $password = (string) ($payload['password'] ?? '');
@@ -75,6 +72,53 @@ if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $birthDate)) {
     respond(422, [
         'ok' => false,
         'message' => 'Birth date must use YYYY-MM-DD format.',
+    ]);
+}
+
+$birthDateObject = DateTimeImmutable::createFromFormat('!Y-m-d', $birthDate);
+$birthDateErrors = DateTimeImmutable::getLastErrors();
+
+if (
+    !$birthDateObject ||
+    ($birthDateErrors !== false && ($birthDateErrors['warning_count'] > 0 || $birthDateErrors['error_count'] > 0)) ||
+    $birthDateObject->format('Y-m-d') !== $birthDate
+) {
+    respond(422, [
+        'ok' => false,
+        'message' => 'Enter a valid birth date.',
+    ]);
+}
+
+$today = new DateTimeImmutable('today');
+$age = $birthDateObject->diff($today)->y;
+
+if ($birthDateObject > $today || $age < 1) {
+    respond(422, [
+        'ok' => false,
+        'message' => 'You must be at least 1 year old.',
+    ]);
+}
+
+$allowedGenders = ['male', 'female', 'bisexual', 'gay', 'lesbian', 'prefer_not_to_say'];
+
+if (!in_array($gender, $allowedGenders, true)) {
+    respond(422, [
+        'ok' => false,
+        'message' => 'Select a valid gender.',
+    ]);
+}
+
+if ($middleInitial !== '' && !preg_match('/^[A-Za-z]$/', $middleInitial)) {
+    respond(422, [
+        'ok' => false,
+        'message' => 'Middle initial must be one letter.',
+    ]);
+}
+
+if ($extensionName !== '' && !preg_match('/^[A-Za-z.]{1,3}$/', $extensionName)) {
+    respond(422, [
+        'ok' => false,
+        'message' => 'Extension name must be at most 3 letters or periods.',
     ]);
 }
 
@@ -137,7 +181,7 @@ try {
             last_name,
             extension_name,
             birth_date,
-            birth_place
+            gender
         ) VALUES (
             :user_id,
             :first_name,
@@ -145,7 +189,7 @@ try {
             :last_name,
             :extension_name,
             :birth_date,
-            :birth_place
+            :gender
         )'
     );
     $statement->execute([
@@ -155,32 +199,23 @@ try {
         'last_name' => $lastName,
         'extension_name' => $extensionName !== '' ? $extensionName : null,
         'birth_date' => $birthDate,
-        'birth_place' => $birthPlace,
+        'gender' => $gender,
     ]);
 
     $statement = $pdo->prepare(
         'INSERT INTO user_contact_information (
             user_id,
             contact_number,
-            city,
-            province,
-            barangay,
             country
         ) VALUES (
             :user_id,
             :contact_number,
-            :city,
-            :province,
-            :barangay,
             :country
         )'
     );
     $statement->execute([
         'user_id' => $userId,
         'contact_number' => $contactNumber,
-        'city' => $city,
-        'province' => $province,
-        'barangay' => $barangay,
         'country' => $country,
     ]);
 

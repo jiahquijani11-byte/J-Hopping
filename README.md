@@ -12,14 +12,17 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    http://localhost/phpmyadmin
    ```
 
-3. Import the migration file:
+3. Import the migration files in numeric order:
 
    ```text
    database/migrations/001_create_jhopping_database.sql
+   database/migrations/002_add_user_role_and_seed_admin.sql
+   database/migrations/003_create_destination_managers_table.sql
+   database/migrations/004_update_signup_profile_fields.sql
    ```
 
-   This creates the MySQL database named `jhopping` with normalized auth tables:
-   `users`, `user_personal_information`, and `user_contact_information`.
+   This creates the MySQL database named `jhopping` with its normalized auth,
+   profile, contact, and destination-manager tables.
 
 4. Check the database connection in your browser:
 

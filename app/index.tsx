@@ -1,7 +1,8 @@
 import { router } from "expo-router";
+import { Image } from "expo-image";
+import { StatusBar } from "expo-status-bar";
 import { useRef, useState } from "react";
 import {
-  ImageBackground,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -27,15 +28,27 @@ const slides = [
 export default function Index() {
   const { height, width } = useWindowDimensions();
   const [activeSlide, setActiveSlide] = useState(0);
+  const [loadedSlides, setLoadedSlides] = useState(() => new Set([0]));
   const carouselRef = useRef<ScrollView>(null);
+
+  const preloadRemainingSlides = () => {
+    setLoadedSlides((currentSlides) => {
+      if (currentSlides.size === slides.length) return currentSlides;
+
+      return new Set(slides.map((_, index) => index));
+    });
+  };
 
   const handleNext = () => {
     if (activeSlide < slides.length - 1) {
-      carouselRef.current?.scrollTo({
-        x: width * (activeSlide + 1),
-        animated: true,
+      preloadRemainingSlides();
+      requestAnimationFrame(() => {
+        carouselRef.current?.scrollTo({
+          x: width * (activeSlide + 1),
+          animated: true,
+        });
+        setActiveSlide(activeSlide + 1);
       });
-      setActiveSlide(activeSlide + 1);
       return;
     }
 
@@ -44,26 +57,34 @@ export default function Index() {
 
   return (
     <View style={styles.container}>
+      <StatusBar backgroundColor="transparent" style="light" translucent />
       <ScrollView
         ref={carouselRef}
         style={styles.carousel}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
+        onScrollBeginDrag={preloadRemainingSlides}
         onMomentumScrollEnd={(event) => {
           const nextSlide = Math.round(event.nativeEvent.contentOffset.x / width);
           setActiveSlide(nextSlide);
         }}
         scrollEventThrottle={16}
       >
-        {slides.map((slide) => (
-          <ImageBackground
+        {slides.map((slide, index) => (
+          <View
             key={slide.title}
-            source={slide.image}
-            resizeMode="cover"
             style={[styles.slide, { height, width }]}
-            imageStyle={styles.slideImage}
           >
+            <Image
+              cachePolicy="memory-disk"
+              contentFit="cover"
+              priority={index === activeSlide ? "high" : "normal"}
+              source={loadedSlides.has(index) ? slide.image : null}
+              onLoadEnd={index === 0 ? preloadRemainingSlides : undefined}
+              style={StyleSheet.absoluteFill}
+              transition={0}
+            />
             <View style={styles.overlay} />
             <SafeAreaView style={styles.content}>
               <View style={styles.heroText}>
@@ -71,7 +92,7 @@ export default function Index() {
                 <Text style={styles.subtitle}>{slide.subtitle}</Text>
               </View>
             </SafeAreaView>
-          </ImageBackground>
+          </View>
         ))}
       </ScrollView>
 
@@ -106,11 +127,6 @@ const styles = StyleSheet.create({
   slide: {
     backgroundColor: "#111827",
     flex: 1,
-  },
-  slideImage: {
-    backgroundColor: "#111827",
-    height: "100%",
-    width: "100%",
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
