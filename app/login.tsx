@@ -14,9 +14,6 @@ import { AuthLayout } from "../components/AuthLayout";
 import { loginUser } from "../lib/api";
 import { useAuth } from "../lib/auth-context";
 
-const ADMIN_USERNAME = "jiahadmin";
-const ADMIN_PASSWORD = "admin123";
-
 export default function Login() {
   const { signIn } = useAuth();
   const [username, setUsername] = useState("");
@@ -37,19 +34,6 @@ export default function Login() {
     setIsSigningIn(true);
 
     try {
-      if (cleanUsername === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-        await signIn({
-          id: 0,
-          firstName: "Admin",
-          lastName: null,
-          email: "admin@jhopping.com",
-          username: ADMIN_USERNAME,
-          role: "admin",
-        });
-        setPassword("");
-        return;
-      }
-
       const result = await loginUser({ identifier: cleanUsername, password });
       await signIn(result.data);
       setPassword("");

@@ -5,7 +5,9 @@ import type { PropsWithChildren } from "react";
 export type AuthUser = {
   id: number;
   firstName: string | null;
+  middleInitial?: string | null;
   lastName: string | null;
+  extensionName?: string | null;
   email: string;
   username: string;
   role: "user" | "admin" | "manager";

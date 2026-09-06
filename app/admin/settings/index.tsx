@@ -5,11 +5,12 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LogoutModal } from "../../../components/LogoutModal";
 import { useAuth } from "../../../lib/auth-context";
+import { formatProfileName } from "../../../lib/text";
 
 export default function AdminSettings() {
   const { user } = useAuth();
   const [showLogout, setShowLogout] = useState(false);
-  const adminName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "Administrator";
+  const adminName = formatProfileName(user ?? {}) || user?.username || "Administrator";
   const adminInitials = [user?.firstName, user?.lastName]
     .filter(Boolean)
     .map((part) => part?.[0]?.toUpperCase())

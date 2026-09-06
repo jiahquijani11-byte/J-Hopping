@@ -201,7 +201,10 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
       } else {
         await createDestinationManager(payload);
       }
-      router.back();
+      router.replace({
+        pathname: "/admin/managers",
+        params: { success: managerId ? "updated" : "created" },
+      });
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Unable to save manager.");
     } finally {
@@ -225,7 +228,7 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
             setFormError("");
             try {
               await deleteDestinationManager(managerId);
-              router.back();
+              router.replace({ pathname: "/admin/managers", params: { success: "deleted" } });
             } catch (error) {
               setFormError(error instanceof Error ? error.message : "Unable to delete manager.");
               setIsSaving(false);

@@ -55,7 +55,9 @@ try {
             users.role,
             users.password_hash,
             user_personal_information.first_name,
+            user_personal_information.middle_initial,
             user_personal_information.last_name,
+            user_personal_information.extension_name,
             destination_managers.first_name AS manager_first_name,
             destination_managers.last_name AS manager_last_name
          FROM users
@@ -86,7 +88,9 @@ try {
         'data' => [
             'id' => $user['id'],
             'firstName' => $user['first_name'] ?? $user['manager_first_name'],
+            'middleInitial' => $user['middle_initial'] ?? null,
             'lastName' => $user['last_name'] ?? $user['manager_last_name'],
+            'extensionName' => $user['extension_name'] ?? null,
             'email' => $user['email'],
             'username' => $user['username'],
             'role' => $user['role'],

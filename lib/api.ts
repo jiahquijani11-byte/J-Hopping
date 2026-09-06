@@ -40,6 +40,24 @@ export type DestinationManagerPayload = {
   status?: ManagerStatus;
 };
 
+export type DestinationManagerPage = {
+  data: DestinationManager[];
+  meta: {
+    page: number;
+    perPage: number;
+    pendingCount: number;
+    total: number;
+    totalPages: number;
+  };
+};
+
+export type DestinationManagerQuery = {
+  page?: number;
+  perPage?: 5 | 10 | 20 | 30;
+  search?: string;
+  status?: "all" | ManagerStatus;
+};
+
 type SignupPayload = {
   firstName: string;
   middleInitial: string;
@@ -111,7 +129,9 @@ export async function loginUser(payload: { identifier: string; password: string 
     data: {
       id: number;
       firstName: string | null;
+      middleInitial: string | null;
       lastName: string | null;
+      extensionName: string | null;
       email: string;
       username: string;
       role: "user" | "admin" | "manager";
@@ -119,9 +139,18 @@ export async function loginUser(payload: { identifier: string; password: string 
   };
 }
 
-export async function getDestinationManagers() {
-  const data = await requestJson("destination-managers.php");
-  return data.data as DestinationManager[];
+export async function getDestinationManagers(query: DestinationManagerQuery = {}) {
+  const params = new URLSearchParams();
+
+  if (query.page) params.set("page", String(query.page));
+  if (query.perPage) params.set("per_page", String(query.perPage));
+  if (query.search?.trim()) params.set("search", query.search.trim());
+  if (query.status && query.status !== "all") params.set("status", query.status);
+
+  const data = await requestJson(
+    `destination-managers.php${params.size ? `?${params.toString()}` : ""}`,
+  );
+  return data as { ok: true } & DestinationManagerPage;
 }
 
 export async function getDestinationManager(id: number) {

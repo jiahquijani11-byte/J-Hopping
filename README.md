@@ -19,6 +19,7 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    database/migrations/002_add_user_role_and_seed_admin.sql
    database/migrations/003_create_destination_managers_table.sql
    database/migrations/004_update_signup_profile_fields.sql
+   database/migrations/005_seed_admin_profile.sql
    ```
 
    This creates the MySQL database named `jhopping` with its normalized auth,

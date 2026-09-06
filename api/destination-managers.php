@@ -144,9 +144,82 @@ try {
             respond(200, ['ok' => true, 'data' => managerData($manager)]);
         }
 
-        $statement = $pdo->query(managerSelect() . ' ORDER BY destination_managers.created_at DESC');
+        $page = max(1, (int) ($_GET['page'] ?? 1));
+        $perPage = (int) ($_GET['per_page'] ?? 5);
+        $allowedPerPage = [5, 10, 20, 30];
+
+        if (!in_array($perPage, $allowedPerPage, true)) {
+            $perPage = 5;
+        }
+
+        $search = trim((string) ($_GET['search'] ?? ''));
+        $status = trim((string) ($_GET['status'] ?? ''));
+        $where = [];
+        $values = [];
+
+        if ($status !== '') {
+            if (!in_array($status, ['active', 'pending', 'suspended'], true)) {
+                respond(422, ['ok' => false, 'message' => 'Select a valid manager status.']);
+            }
+
+            $where[] = 'destination_managers.status = :status';
+            $values['status'] = $status;
+        }
+
+        if ($search !== '') {
+            $where[] = "CONCAT_WS(' ',
+                destination_managers.business_name,
+                destination_managers.first_name,
+                destination_managers.middle_name,
+                destination_managers.last_name,
+                destination_managers.extension_name,
+                users.email,
+                users.username
+            ) LIKE :search";
+            $values['search'] = '%' . $search . '%';
+        }
+
+        $whereSql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
+        $countStatement = $pdo->prepare(
+            'SELECT COUNT(*) FROM destination_managers
+             INNER JOIN users ON users.id = destination_managers.user_id' . $whereSql
+        );
+        $countStatement->execute($values);
+        $total = (int) $countStatement->fetchColumn();
+        $totalPages = max(1, (int) ceil($total / $perPage));
+        $page = min($page, $totalPages);
+        $offset = ($page - 1) * $perPage;
+
+        $pendingStatement = $pdo->query(
+            "SELECT COUNT(*) FROM destination_managers WHERE status = 'pending'"
+        );
+        $pendingCount = (int) $pendingStatement->fetchColumn();
+
+        $statement = $pdo->prepare(
+            managerSelect() . $whereSql .
+            ' ORDER BY destination_managers.created_at DESC LIMIT :limit OFFSET :offset'
+        );
+
+        foreach ($values as $key => $value) {
+            $statement->bindValue(':' . $key, $value);
+        }
+
+        $statement->bindValue(':limit', $perPage, PDO::PARAM_INT);
+        $statement->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $statement->execute();
         $managers = array_map('managerData', $statement->fetchAll());
-        respond(200, ['ok' => true, 'data' => $managers]);
+
+        respond(200, [
+            'ok' => true,
+            'data' => $managers,
+            'meta' => [
+                'page' => $page,
+                'perPage' => $perPage,
+                'pendingCount' => $pendingCount,
+                'total' => $total,
+                'totalPages' => $totalPages,
+            ],
+        ]);
     }
 
     if ($method === 'POST') {
