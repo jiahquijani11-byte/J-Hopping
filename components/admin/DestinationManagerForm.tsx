@@ -22,6 +22,7 @@ import {
   type ManagerStatus,
   updateDestinationManager,
 } from "../../lib/api";
+import { toTitleCase } from "../../lib/text";
 
 type FormValues = DestinationManagerPayload & { confirmPassword: string };
 type FieldName = keyof FormValues;
@@ -46,6 +47,14 @@ const STATUS_OPTIONS: { label: string; value: ManagerStatus }[] = [
   { label: "Suspended", value: "suspended" },
 ];
 
+const CREATE_STEPS = [
+  { fields: ["businessName", "firstName", "middleName", "lastName", "extensionName"] as FieldName[], title: "Business Details" },
+  { fields: ["email", "contactNumber"] as FieldName[], title: "Contact Details" },
+  { fields: ["username", "password", "confirmPassword"] as FieldName[], title: "Account Details" },
+];
+
+const OPTIONAL_FIELDS: FieldName[] = ["middleName", "extensionName"];
+
 export function DestinationManagerForm({ managerId }: { managerId?: number }) {
   const isEditing = managerId !== undefined;
   const [form, setForm] = useState<FormValues>(EMPTY_FORM);
@@ -55,6 +64,7 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
   const [formError, setFormError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [step, setStep] = useState(1);
 
   useEffect(() => {
     if (!managerId) return;
@@ -96,8 +106,18 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
     setFormError("");
   };
 
-  const validate = () => {
+  const validate = (fields?: FieldName[]) => {
     const nextErrors: Partial<Record<FieldName, string>> = {};
+    const fieldsToValidate = fields ?? [
+      "businessName",
+      "firstName",
+      "lastName",
+      "email",
+      "contactNumber",
+      "username",
+      "password",
+      "confirmPassword",
+    ];
     const required: { field: FieldName; label: string }[] = [
       { field: "businessName", label: "Business name" },
       { field: "firstName", label: "First name" },
@@ -108,14 +128,22 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
     ];
 
     required.forEach(({ field, label }) => {
-      if (!String(form[field] ?? "").trim()) nextErrors[field] = `${label} is required.`;
+      if (fieldsToValidate.includes(field) && !String(form[field] ?? "").trim()) {
+        nextErrors[field] = `${label} is required.`;
+      }
     });
 
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+    if (
+      fieldsToValidate.includes("email") &&
+      form.email &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())
+    ) {
       nextErrors.email = "Enter a valid email address.";
     }
 
-    if (!isEditing || form.password) {
+    const validatesPassword = fieldsToValidate.includes("password") || fieldsToValidate.includes("confirmPassword");
+
+    if (validatesPassword && (!isEditing || form.password || form.confirmPassword)) {
       const strongPassword =
         form.password.length >= 8 &&
         /[A-Z]/.test(form.password) &&
@@ -138,6 +166,14 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
 
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
+  };
+
+  const handleNext = () => {
+    const currentStep = CREATE_STEPS[step - 1];
+
+    if (validate(currentStep.fields)) {
+      setStep((currentStepNumber) => Math.min(currentStepNumber + 1, CREATE_STEPS.length));
+    }
   };
 
   const handleSubmit = async () => {
@@ -210,12 +246,20 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
     },
   ) => (
     <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label.toUpperCase()}</Text>
+      <Text style={styles.fieldLabel}>
+        {label.toUpperCase()}
+        {!OPTIONAL_FIELDS.includes(field) ? <Text style={styles.requiredMark}> *</Text> : null}
+      </Text>
       <TextInput
         autoCapitalize={options?.autoCapitalize}
         editable={!isSaving}
         keyboardType={options?.keyboardType}
-        onChangeText={(value) => updateField(field, value)}
+        onChangeText={(value) => {
+          const formattedValue = ["businessName", "firstName", "middleName", "lastName"].includes(field)
+            ? toTitleCase(value)
+            : value;
+          updateField(field, formattedValue);
+        }}
         placeholder={placeholder}
         placeholderTextColor="#98A2B3"
         style={[styles.input, errors[field] && styles.inputError]}
@@ -232,7 +276,10 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
     onToggle: () => void,
   ) => (
     <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label.toUpperCase()}</Text>
+      <Text style={styles.fieldLabel}>
+        {label.toUpperCase()}
+        {!isEditing ? <Text style={styles.requiredMark}> *</Text> : null}
+      </Text>
       <View style={[styles.passwordShell, errors[field] && styles.inputError]}>
         <TextInput
           autoCapitalize="none"
@@ -249,6 +296,16 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
         </Pressable>
       </View>
       {errors[field] ? <Text style={styles.errorText}>{errors[field]}</Text> : null}
+    </View>
+  );
+
+  const renderPasswordNote = () => (
+    <View style={styles.passwordNote}>
+      <Ionicons color="#0B4F6C" name="information-circle-outline" size={18} />
+      <Text style={styles.passwordNoteText}>
+        Use 8+ characters with uppercase, lowercase, number, and special character. Passwords must match.
+        {isEditing ? " Leave both password fields blank to keep the current password." : ""}
+      </Text>
     </View>
   );
 
@@ -274,30 +331,66 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <View style={styles.sectionLabel}>
-              <View style={styles.dot} />
-              <Text style={styles.sectionText}>ACCOUNT DETAILS</Text>
+            <View style={styles.stepIndicator} accessibilityLabel={`Step ${step} of ${CREATE_STEPS.length}`}>
+              {CREATE_STEPS.map((createStep, index) => {
+                const stepNumber = index + 1;
+                const active = stepNumber === step;
+                const complete = stepNumber < step;
+
+                return (
+                  <View key={createStep.title} style={styles.stepItem}>
+                    <View style={[styles.stepNumber, (active || complete) && styles.stepNumberActive]}>
+                      <Text style={[styles.stepNumberText, (active || complete) && styles.stepNumberTextActive]}>
+                        {stepNumber}
+                      </Text>
+                    </View>
+                    <Text style={[styles.stepLabel, active && styles.stepLabelActive]}>{createStep.title}</Text>
+                  </View>
+                );
+              })}
             </View>
 
-            {renderField("businessName", "Business Name", "Enter business name")}
-            {renderField("firstName", "First Name", "Enter first name")}
-            {renderField("middleName", "Middle Name", "Optional")}
-            {renderField("lastName", "Last Name", "Enter last name")}
-            {renderField("extensionName", "Extension Name", "Optional")}
-            {renderField("email", "Email", "Enter email address", {
-              autoCapitalize: "none",
-              keyboardType: "email-address",
-            })}
-            {renderField("contactNumber", "Contact Number", "Enter contact number", {
-              keyboardType: "phone-pad",
-            })}
-            {renderField("username", "Username", "Enter username", { autoCapitalize: "none" })}
-            {renderPasswordField("password", "Password", showPassword, () => setShowPassword((value) => !value))}
-            {renderPasswordField("confirmPassword", "Confirm Password", showConfirmPassword, () =>
-              setShowConfirmPassword((value) => !value),
-            )}
+            <View style={styles.sectionLabel}>
+              <View style={styles.dot} />
+              <Text style={styles.sectionText}>
+                {CREATE_STEPS[step - 1].title.toUpperCase()}
+              </Text>
+            </View>
 
-            {isEditing ? (
+            {step === 1 ? (
+              <>
+                {renderField("businessName", "Business Name", "Enter business name")}
+                {renderField("firstName", "First Name", "Enter first name")}
+                {renderField("middleName", "Middle Name", "Optional")}
+                {renderField("lastName", "Last Name", "Enter last name")}
+                {renderField("extensionName", "Extension Name", "Optional")}
+              </>
+            ) : null}
+
+            {step === 2 ? (
+              <>
+                {renderField("email", "Email", "Enter email address", {
+                  autoCapitalize: "none",
+                  keyboardType: "email-address",
+                })}
+                {renderField("contactNumber", "Contact Number", "Enter contact number", {
+                  keyboardType: "phone-pad",
+                })}
+              </>
+            ) : null}
+
+            {step === 3 ? (
+              <>
+                {renderField("username", "Username", "Enter username", { autoCapitalize: "none" })}
+                {renderPasswordField("password", "Password", showPassword, () => setShowPassword((value) => !value))}
+                {renderPasswordField("confirmPassword", "Confirm Password", showConfirmPassword, () =>
+                  setShowConfirmPassword((value) => !value),
+                )}
+                {renderPasswordNote()}
+              </>
+            ) : null}
+
+            {isEditing && step === 3 ? (
               <View style={styles.field}>
                 <Text style={styles.fieldLabel}>ACCOUNT STATUS</Text>
                 <View style={styles.segmented}>
@@ -321,20 +414,35 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
 
             {formError ? <Text style={styles.formError}>{formError}</Text> : null}
 
-            <Pressable
-              disabled={isSaving}
-              onPress={handleSubmit}
-              style={[styles.primaryButton, isSaving && styles.disabled]}
-            >
-              {isSaving ? (
-                <ActivityIndicator color="#1A1A1A" />
-              ) : (
-                <Text style={styles.primaryText}>{isEditing ? "Save changes" : "Create Manager"}</Text>
-              )}
-            </Pressable>
-            <Pressable disabled={isSaving} onPress={() => router.back()} style={styles.cancelButton}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </Pressable>
+            <View style={styles.stepActions}>
+              <Pressable
+                disabled={isSaving}
+                onPress={() => {
+                  if (step === 1) router.back();
+                  else setStep((currentStep) => currentStep - 1);
+                }}
+                style={[styles.cancelButton, styles.stepButton]}
+              >
+                <Text style={styles.cancelText}>Back</Text>
+              </Pressable>
+              <Pressable
+                disabled={isSaving}
+                onPress={step === CREATE_STEPS.length ? handleSubmit : handleNext}
+                style={[styles.primaryButton, styles.stepButton, isSaving && styles.disabled]}
+              >
+                {isSaving ? (
+                  <ActivityIndicator color="#1A1A1A" />
+                ) : (
+                  <Text style={styles.primaryText}>
+                    {step === CREATE_STEPS.length
+                      ? isEditing
+                        ? "Update Manager"
+                        : "Create Manager"
+                      : "Next"}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
             {isEditing ? (
               <Pressable disabled={isSaving} onPress={confirmDelete} style={styles.deleteButton}>
                 <Ionicons color="#C0392B" name="trash-outline" size={18} />
@@ -357,11 +465,27 @@ const styles = StyleSheet.create({
   title: { color: "#FFFFFF", flex: 1, fontSize: 21, fontWeight: "600", lineHeight: 26 },
   loadingArea: { alignItems: "center", flex: 1, justifyContent: "center" },
   content: { gap: 18, paddingBottom: 32, paddingHorizontal: 16, paddingTop: 22 },
+  stepIndicator: { flexDirection: "row", justifyContent: "space-between" },
+  stepItem: { alignItems: "center", flex: 1, gap: 6 },
+  stepNumber: {
+    alignItems: "center",
+    backgroundColor: "#EEF0F2",
+    borderRadius: 12,
+    height: 24,
+    justifyContent: "center",
+    width: 24,
+  },
+  stepNumberActive: { backgroundColor: "#0B4F6C" },
+  stepNumberText: { color: "#667085", fontSize: 11, fontWeight: "700" },
+  stepNumberTextActive: { color: "#FFFFFF" },
+  stepLabel: { color: "#98A2B3", fontSize: 10, fontWeight: "600", textAlign: "center" },
+  stepLabelActive: { color: "#0B4F6C" },
   sectionLabel: { alignItems: "center", flexDirection: "row", gap: 8 },
   dot: { backgroundColor: "#4A9FD8", borderRadius: 3, height: 5, width: 5 },
   sectionText: { color: "#666666", fontSize: 11, fontWeight: "600", letterSpacing: 1.4 },
   field: { gap: 6 },
   fieldLabel: { color: "#666666", fontSize: 10, fontWeight: "600", letterSpacing: 1.2 },
+  requiredMark: { color: "#C0392B" },
   input: {
     borderColor: "#EEF0F2",
     borderRadius: 4,
@@ -382,6 +506,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   passwordInput: { color: "#1A1A1A", flex: 1, fontSize: 14, minHeight: 44, padding: 0 },
+  passwordNote: {
+    alignItems: "flex-start",
+    backgroundColor: "#EAF5FB",
+    borderColor: "#B3D9F0",
+    borderRadius: 4,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 8,
+    padding: 10,
+  },
+  passwordNoteText: { color: "#28546A", flex: 1, fontSize: 12, lineHeight: 17 },
   inputError: { borderColor: "#C0392B" },
   errorText: { color: "#C0392B", fontSize: 12 },
   segmented: { backgroundColor: "#F7F8F9", borderRadius: 4, flexDirection: "row", padding: 3 },
@@ -398,6 +533,8 @@ const styles = StyleSheet.create({
     minHeight: 50,
   },
   primaryText: { color: "#1A1A1A", fontSize: 15, fontWeight: "600" },
+  stepActions: { flexDirection: "row", gap: 10 },
+  stepButton: { flex: 1 },
   cancelButton: {
     alignItems: "center",
     borderColor: "#0A0A0A",
