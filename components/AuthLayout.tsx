@@ -31,7 +31,7 @@ export function AuthLayout({ children, title, subtitle, variant = "signup" }: Au
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={styles.screen}
     >
-      <StatusBar backgroundColor="transparent" style="light" translucent />
+      <StatusBar style="light" />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
@@ -51,7 +51,7 @@ export function AuthLayout({ children, title, subtitle, variant = "signup" }: Au
           <View
             pointerEvents="none"
             style={[
-              StyleSheet.absoluteFillObject,
+              StyleSheet.absoluteFill,
               Platform.OS === "web"
                 ? { backgroundImage: fade }
                 : { experimental_backgroundImage: fade },

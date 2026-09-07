@@ -57,7 +57,7 @@ export default function Index() {
 
   return (
     <View style={styles.container}>
-      <StatusBar backgroundColor="transparent" style="light" translucent />
+      <StatusBar style="light" />
       <ScrollView
         ref={carouselRef}
         style={styles.carousel}
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(11, 18, 32, 0.42)",
   },
   content: {
