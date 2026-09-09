@@ -46,3 +46,12 @@ app-example
 .claude/
 .claude.json
 .claude.jsonc
+
+# Documentation
+docs/
+Documents/
+
+# AI agent instruction files
+AGENTS.md
+CLAUDE.md
+CLAUDE.MD
