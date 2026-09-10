@@ -128,6 +128,7 @@ export async function loginUser(payload: { identifier: string; password: string 
     message: string;
     data: {
       id: number;
+      businessName?: string | null;
       firstName: string | null;
       middleInitial: string | null;
       lastName: string | null;

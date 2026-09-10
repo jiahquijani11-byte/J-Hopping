@@ -59,7 +59,10 @@ try {
             user_personal_information.last_name,
             user_personal_information.extension_name,
             destination_managers.first_name AS manager_first_name,
-            destination_managers.last_name AS manager_last_name
+            destination_managers.business_name AS manager_business_name,
+            destination_managers.middle_name AS manager_middle_name,
+            destination_managers.last_name AS manager_last_name,
+            destination_managers.extension_name AS manager_extension_name
          FROM users
          LEFT JOIN user_personal_information
             ON user_personal_information.user_id = users.id
@@ -87,10 +90,14 @@ try {
         'message' => 'Signed in successfully.',
         'data' => [
             'id' => $user['id'],
+            'businessName' => $user['manager_business_name'] ?? null,
             'firstName' => $user['first_name'] ?? $user['manager_first_name'],
-            'middleInitial' => $user['middle_initial'] ?? null,
+            'middleInitial' => $user['middle_initial']
+                ?? ($user['manager_middle_name'] !== null && $user['manager_middle_name'] !== ''
+                    ? substr($user['manager_middle_name'], 0, 1)
+                    : null),
             'lastName' => $user['last_name'] ?? $user['manager_last_name'],
-            'extensionName' => $user['extension_name'] ?? null,
+            'extensionName' => $user['extension_name'] ?? $user['manager_extension_name'],
             'email' => $user['email'],
             'username' => $user['username'],
             'role' => $user['role'],

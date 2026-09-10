@@ -7,23 +7,29 @@ const ACTIVE_COLOR = "#ffffff";
 const INACTIVE_COLOR = "#8a94a6";
 const MIDDLE_ICON_COLOR = "#111827";
 
-type AppTabBarProps = BottomTabBarProps & { variant?: "default" | "admin" };
+type AppTabBarProps = BottomTabBarProps & { variant?: "default" | "admin" | "manager" };
 
 export function AppTabBar({ state, descriptors, navigation, variant = "default" }: AppTabBarProps) {
   const insets = useSafeAreaInsets();
   const isAdmin = variant === "admin";
-  const activeColor = isAdmin ? "#0B4F6C" : ACTIVE_COLOR;
-  const inactiveColor = isAdmin ? "#6B7684" : INACTIVE_COLOR;
+  const isManager = variant === "manager";
+  const activeColor = isAdmin || isManager ? "#0B4F6C" : ACTIVE_COLOR;
+  const inactiveColor = isAdmin || isManager ? "#6B7684" : INACTIVE_COLOR;
+  const visibleRoutes = state.routes.filter(
+    (route) =>
+      (descriptors[route.key].options as { href?: string | null }).href !== null &&
+      !(isManager && (route.name === "business" || route.name === "reports")),
+  );
 
   return (
     <View
       style={[
         styles.bar,
-        isAdmin && styles.adminBar,
-        { paddingBottom: Math.max(insets.bottom, isAdmin ? 14 : 10) },
+        (isAdmin || isManager) && styles.adminBar,
+        { paddingBottom: Math.max(insets.bottom, isAdmin || isManager ? 14 : 10) },
       ]}
     >
-      {state.routes.map((route, index) => {
+      {visibleRoutes.map((route, index) => {
         const options = descriptors[route.key].options;
         const isFocused = state.index === index;
         const isMiddle = index === MIDDLE_INDEX;
@@ -54,6 +60,8 @@ export function AppTabBar({ state, descriptors, navigation, variant = "default" 
         const color = isMiddle
           ? isAdmin
             ? "#ffffff"
+            : isManager
+              ? "#ffffff"
             : MIDDLE_ICON_COLOR
           : isFocused
             ? activeColor
@@ -73,8 +81,8 @@ export function AppTabBar({ state, descriptors, navigation, variant = "default" 
               <View
                 style={[
                   styles.middleCircle,
-                  isAdmin && styles.adminMiddleCircle,
-                  !isAdmin && isFocused && styles.middleCircleFocused,
+                  (isAdmin || isManager) && styles.adminMiddleCircle,
+                  !isAdmin && !isManager && isFocused && styles.middleCircleFocused,
                 ]}
               >
                 {icon}

@@ -17,6 +17,7 @@ function RootNavigator() {
 
   const isLoggedIn = status === "authenticated";
   const isAdmin = user?.role === "admin";
+  const isManager = user?.role === "manager";
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -30,7 +31,11 @@ function RootNavigator() {
         <Stack.Screen name="admin" />
       </Stack.Protected>
 
-      <Stack.Protected guard={isLoggedIn && !isAdmin}>
+      <Stack.Protected guard={isLoggedIn && isManager}>
+        <Stack.Screen name="manager" />
+      </Stack.Protected>
+
+      <Stack.Protected guard={isLoggedIn && user?.role === "user"}>
         <Stack.Screen name="user" />
       </Stack.Protected>
     </Stack>

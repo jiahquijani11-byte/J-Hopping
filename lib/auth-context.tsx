@@ -4,6 +4,7 @@ import type { PropsWithChildren } from "react";
 
 export type AuthUser = {
   id: number;
+  businessName?: string | null;
   firstName: string | null;
   middleInitial?: string | null;
   lastName: string | null;
