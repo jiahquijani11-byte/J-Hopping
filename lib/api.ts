@@ -40,6 +40,26 @@ export type DestinationManagerPayload = {
   status?: ManagerStatus;
 };
 
+export type ManagerBusinessProfile = {
+  businessName: string;
+  firstName: string;
+  middleName: string | null;
+  lastName: string;
+  extensionName: string | null;
+  email: string;
+  contactNumber: string;
+  username: string;
+};
+
+export type ManagerBusinessProfilePayload = Omit<
+  ManagerBusinessProfile,
+  "businessName" | "middleName" | "extensionName"
+> & {
+  middleName: string;
+  extensionName: string;
+  password: string;
+};
+
 export type DestinationManagerPage = {
   data: DestinationManager[];
   meta: {
@@ -128,6 +148,7 @@ export async function loginUser(payload: { identifier: string; password: string 
     message: string;
     data: {
       id: number;
+      authToken: string;
       businessName?: string | null;
       firstName: string | null;
       middleInitial: string | null;
@@ -180,4 +201,40 @@ export async function updateDestinationManager(
 
 export async function deleteDestinationManager(id: number) {
   await requestJson(`destination-managers.php?id=${id}`, { method: "DELETE" });
+}
+
+async function managerProfileRequest(
+  authToken: string,
+  options?: RequestInit,
+) {
+  return requestJson("manager-profile.php", {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${authToken}`,
+      ...options?.headers,
+    },
+  });
+}
+
+export async function getManagerBusinessProfile(authToken: string) {
+  const data = await managerProfileRequest(authToken);
+  return data.data as ManagerBusinessProfile;
+}
+
+export async function updateManagerBusinessProfile(
+  authToken: string,
+  payload: ManagerBusinessProfilePayload,
+) {
+  const data = await managerProfileRequest(authToken, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+  return data.data as ManagerBusinessProfile;
+}
+
+export async function logoutUser(authToken: string) {
+  await requestJson("logout.php", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${authToken}` },
+  });
 }

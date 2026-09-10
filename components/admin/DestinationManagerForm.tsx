@@ -18,11 +18,15 @@ import {
   createDestinationManager,
   deleteDestinationManager,
   getDestinationManager,
+  getManagerBusinessProfile,
   type DestinationManagerPayload,
   type ManagerStatus,
+  updateManagerBusinessProfile,
   updateDestinationManager,
 } from "../../lib/api";
+import { useAuth } from "../../lib/auth-context";
 import { toTitleCase } from "../../lib/text";
+import { SuccessModal } from "../SuccessModal";
 
 type FormValues = DestinationManagerPayload & { confirmPassword: string };
 type FieldName = keyof FormValues;
@@ -55,8 +59,9 @@ const CREATE_STEPS = [
 
 const OPTIONAL_FIELDS: FieldName[] = ["middleName", "extensionName"];
 
-export function DestinationManagerForm({ managerId }: { managerId?: number }) {
-  const isEditing = managerId !== undefined;
+export function DestinationManagerForm({ managerId, selfService = false }: { managerId?: number; selfService?: boolean }) {
+  const { updateUser, user } = useAuth();
+  const isEditing = managerId !== undefined || selfService;
   const [form, setForm] = useState<FormValues>(EMPTY_FORM);
   const [errors, setErrors] = useState<Partial<Record<FieldName, string>>>({});
   const [isLoading, setIsLoading] = useState(isEditing);
@@ -64,14 +69,19 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
   const [formError, setFormError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
   const [step, setStep] = useState(1);
 
   useEffect(() => {
-    if (!managerId) return;
+    if (!managerId && !selfService) return;
 
     let active = true;
 
-    getDestinationManager(managerId)
+    const profileRequest = selfService
+      ? getManagerBusinessProfile(user?.authToken ?? "")
+      : getDestinationManager(managerId!);
+
+    profileRequest
       .then((manager) => {
         if (!active) return;
         setForm({
@@ -85,7 +95,7 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
           username: manager.username,
           password: "",
           confirmPassword: "",
-          status: manager.status,
+          status: "status" in manager ? (manager.status as ManagerStatus) : "active",
         });
       })
       .catch((error) => {
@@ -98,7 +108,7 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
     return () => {
       active = false;
     };
-  }, [managerId]);
+  }, [managerId, selfService, user?.authToken]);
 
   const updateField = (field: FieldName, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -179,6 +189,11 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
   const handleSubmit = async () => {
     if (!validate()) return;
 
+    if (selfService && !user?.authToken) {
+      setFormError("Your session is invalid. Please sign in again.");
+      return;
+    }
+
     setIsSaving(true);
     setFormError("");
 
@@ -196,15 +211,39 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
     };
 
     try {
-      if (managerId) {
+      if (selfService) {
+        const updatedProfile = await updateManagerBusinessProfile(user!.authToken, {
+          firstName: payload.firstName,
+          middleName: payload.middleName,
+          lastName: payload.lastName,
+          extensionName: payload.extensionName,
+          email: payload.email,
+          contactNumber: payload.contactNumber,
+          username: payload.username,
+          password: payload.password,
+        });
+        await updateUser({
+          businessName: updatedProfile.businessName,
+          firstName: updatedProfile.firstName,
+          middleInitial: updatedProfile.middleName?.charAt(0) ?? null,
+          lastName: updatedProfile.lastName,
+          extensionName: updatedProfile.extensionName,
+          email: updatedProfile.email,
+          username: updatedProfile.username,
+        });
+        setShowSuccess(true);
+      } else if (managerId) {
         await updateDestinationManager(managerId, payload);
       } else {
         await createDestinationManager(payload);
       }
-      router.replace({
-        pathname: "/admin/managers",
-        params: { success: managerId ? "updated" : "created" },
-      });
+
+      if (!selfService) {
+        router.replace({
+          pathname: "/admin/managers",
+          params: { success: managerId ? "updated" : "created" },
+        });
+      }
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Unable to save manager.");
     } finally {
@@ -239,6 +278,20 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
     );
   };
 
+  const handlePageBack = () => {
+    if (selfService) router.replace("/manager/settings");
+    else router.back();
+  };
+
+  const handleStepBack = () => {
+    if (step > 1) {
+      setStep((currentStep) => currentStep - 1);
+      return;
+    }
+
+    handlePageBack();
+  };
+
   const renderField = (
     field: FieldName,
     label: string,
@@ -255,7 +308,7 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
       </Text>
       <TextInput
         autoCapitalize={options?.autoCapitalize}
-        editable={!isSaving}
+        editable={!isSaving && !(selfService && field === "businessName")}
         keyboardType={options?.keyboardType}
         onChangeText={(value) => {
           const formattedValue = ["businessName", "firstName", "middleName", "lastName"].includes(field)
@@ -265,7 +318,11 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
         }}
         placeholder={placeholder}
         placeholderTextColor="#98A2B3"
-        style={[styles.input, errors[field] && styles.inputError]}
+        style={[
+          styles.input,
+          selfService && field === "businessName" && styles.readOnlyInput,
+          errors[field] && styles.inputError,
+        ]}
         value={String(form[field] ?? "")}
       />
       {errors[field] ? <Text style={styles.errorText}>{errors[field]}</Text> : null}
@@ -316,10 +373,12 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
     <View style={styles.screen}>
       <SafeAreaView edges={["top"]} style={styles.header}>
         <View style={styles.backRow}>
-          <Pressable accessibilityLabel="Go back" onPress={() => router.back()} style={styles.backButton}>
+          <Pressable accessibilityLabel="Go back" onPress={handlePageBack} style={styles.backButton}>
             <Ionicons color="#FFFFFF" name="chevron-back" size={24} />
           </Pressable>
-          <Text style={styles.title}>{isEditing ? "Edit Destination Manager" : "New Destination Manager"}</Text>
+          <Text style={styles.title}>
+            {selfService ? "Business Profile" : isEditing ? "Edit Destination Manager" : "New Destination Manager"}
+          </Text>
         </View>
       </SafeAreaView>
 
@@ -393,7 +452,7 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
               </>
             ) : null}
 
-            {isEditing && step === 3 ? (
+            {isEditing && !selfService && step === 3 ? (
               <View style={styles.field}>
                 <Text style={styles.fieldLabel}>ACCOUNT STATUS</Text>
                 <View style={styles.segmented}>
@@ -420,10 +479,7 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
             <View style={styles.stepActions}>
               <Pressable
                 disabled={isSaving}
-                onPress={() => {
-                  if (step === 1) router.back();
-                  else setStep((currentStep) => currentStep - 1);
-                }}
+                onPress={handleStepBack}
                 style={[styles.cancelButton, styles.stepButton]}
               >
                 <Text style={styles.cancelText}>Back</Text>
@@ -438,7 +494,9 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
                 ) : (
                   <Text style={styles.primaryText}>
                     {step === CREATE_STEPS.length
-                      ? isEditing
+                      ? selfService
+                        ? "Save Changes"
+                        : isEditing
                         ? "Update Manager"
                         : "Create Manager"
                       : "Next"}
@@ -446,7 +504,7 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
                 )}
               </Pressable>
             </View>
-            {isEditing ? (
+            {managerId && !selfService ? (
               <Pressable disabled={isSaving} onPress={confirmDelete} style={styles.deleteButton}>
                 <Ionicons color="#C0392B" name="trash-outline" size={18} />
                 <Text style={styles.deleteText}>Delete manager</Text>
@@ -455,6 +513,14 @@ export function DestinationManagerForm({ managerId }: { managerId?: number }) {
           </ScrollView>
         )}
       </KeyboardAvoidingView>
+      <SuccessModal
+        message="Business Profile Updated Successfully"
+        onClose={() => {
+          setShowSuccess(false);
+          router.replace("/manager/settings");
+        }}
+        visible={showSuccess}
+      />
     </View>
   );
 }
@@ -499,6 +565,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 11,
   },
+  readOnlyInput: { backgroundColor: "#F7F8F9", color: "#667085" },
   passwordShell: {
     alignItems: "center",
     borderColor: "#EEF0F2",

@@ -1,7 +1,7 @@
 <?php
 
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Content-Type: application/json');
 
@@ -85,11 +85,23 @@ try {
         ]);
     }
 
+    $pdo->exec('DELETE FROM auth_sessions WHERE expires_at <= NOW()');
+    $authToken = bin2hex(random_bytes(32));
+    $statement = $pdo->prepare(
+        'INSERT INTO auth_sessions (user_id, token_hash, expires_at)
+         VALUES (:user_id, :token_hash, DATE_ADD(NOW(), INTERVAL 30 DAY))'
+    );
+    $statement->execute([
+        'user_id' => $user['id'],
+        'token_hash' => hash('sha256', $authToken),
+    ]);
+
     respond(200, [
         'ok' => true,
         'message' => 'Signed in successfully.',
         'data' => [
             'id' => $user['id'],
+            'authToken' => $authToken,
             'businessName' => $user['manager_business_name'] ?? null,
             'firstName' => $user['first_name'] ?? $user['manager_first_name'],
             'middleInitial' => $user['middle_initial']
