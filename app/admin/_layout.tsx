@@ -10,7 +10,7 @@ export default function AdminTabsLayout() {
         tabBarActiveTintColor: "#ffffff",
         tabBarInactiveTintColor: "#8a94a6",
       }}
-      tabBar={(props) => <AppTabBar {...props} />}
+      tabBar={(props) => <AppTabBar {...props} variant="admin" />}
     >
       <Tabs.Screen
         name="index"
@@ -31,20 +31,20 @@ export default function AdminTabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="managers"
+        options={{
+          title: "Managers",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons color={color} name="add" size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="bookings"
         options={{
           title: "Bookings",
           tabBarIcon: ({ focused, color, size }) => (
             <Ionicons color={color} name={focused ? "calendar" : "calendar-outline"} size={size} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="reports"
-        options={{
-          title: "Reports",
-          tabBarIcon: ({ focused, color, size }) => (
-            <Ionicons color={color} name={focused ? "bar-chart" : "bar-chart-outline"} size={size} />
           ),
         }}
       />

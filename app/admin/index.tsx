@@ -2,10 +2,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { ImageBackground, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../lib/auth-context";
+import { formatProfileName } from "../../lib/text";
 
 export default function AdminHome() {
   const { user } = useAuth();
-  const firstName = user?.firstName ?? "Administrator";
+  const adminName = formatProfileName(user ?? {}) || user?.username || "Administrator";
 
   return (
     <View style={styles.container}>
@@ -23,7 +24,7 @@ export default function AdminHome() {
             </View>
             <Text style={styles.title}>Admin Dashboard</Text>
             <Text style={styles.subtitle}>
-              Welcome back, {firstName}. Manage users and bookings from here.
+              Welcome back, {adminName}. Manage users and bookings from here.
             </Text>
           </View>
         </SafeAreaView>
@@ -47,7 +48,7 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(11, 18, 32, 0.48)",
   },
   content: {
