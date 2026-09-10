@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import { File, UploadType } from "expo-file-system";
 
 const getApiBaseUrl = () => {
   const hostUri = Constants.expoConfig?.hostUri;
@@ -49,15 +50,21 @@ export type ManagerBusinessProfile = {
   email: string;
   contactNumber: string;
   username: string;
+  profilePictureUrl: string | null;
 };
 
 export type ManagerBusinessProfilePayload = Omit<
   ManagerBusinessProfile,
-  "businessName" | "middleName" | "extensionName"
+  "businessName" | "middleName" | "extensionName" | "profilePictureUrl"
 > & {
   middleName: string;
   extensionName: string;
   password: string;
+};
+
+type ProfileImageUpload = {
+  mimeType: "image/jpeg" | "image/png" | "image/webp";
+  uri: string;
 };
 
 export type DestinationManagerPage = {
@@ -143,7 +150,7 @@ export async function signupUser(payload: SignupPayload) {
 
 export async function loginUser(payload: { identifier: string; password: string }) {
   const data = await postJson("login.php", payload);
-  return data as {
+  const result = data as {
     ok: true;
     message: string;
     data: {
@@ -157,8 +164,15 @@ export async function loginUser(payload: { identifier: string; password: string 
       email: string;
       username: string;
       role: "user" | "admin" | "manager";
+      profilePictureUrl?: string | null;
     };
   };
+
+  if (result.data.profilePictureUrl) {
+    result.data.profilePictureUrl = `${API_BASE_URL}/${result.data.profilePictureUrl}`;
+  }
+
+  return result;
 }
 
 export async function getDestinationManagers(query: DestinationManagerQuery = {}) {
@@ -216,20 +230,60 @@ async function managerProfileRequest(
   });
 }
 
+function normalizedManagerProfile(data: ManagerBusinessProfile) {
+  return {
+    ...data,
+    profilePictureUrl: data.profilePictureUrl
+      ? `${API_BASE_URL}/${data.profilePictureUrl}`
+      : null,
+  };
+}
+
 export async function getManagerBusinessProfile(authToken: string) {
   const data = await managerProfileRequest(authToken);
-  return data.data as ManagerBusinessProfile;
+  return normalizedManagerProfile(data.data as ManagerBusinessProfile);
 }
 
 export async function updateManagerBusinessProfile(
   authToken: string,
   payload: ManagerBusinessProfilePayload,
+  profileImage?: ProfileImageUpload | null,
 ) {
+  if (profileImage) {
+    const result = await new File(profileImage.uri).upload(
+      `${API_BASE_URL}/manager-profile.php`,
+      {
+        fieldName: "profilePicture",
+        headers: { Authorization: `Bearer ${authToken}` },
+        httpMethod: "POST",
+        mimeType: profileImage.mimeType,
+        parameters: {
+          firstName: payload.firstName,
+          middleName: payload.middleName,
+          lastName: payload.lastName,
+          extensionName: payload.extensionName,
+          email: payload.email,
+          contactNumber: payload.contactNumber,
+          username: payload.username,
+          password: payload.password,
+        },
+        uploadType: UploadType.MULTIPART,
+      },
+    );
+    const data = JSON.parse(result.body);
+
+    if (result.status < 200 || result.status >= 300 || !data.ok) {
+      throw new Error(data.message ?? "Unable to update the business profile.");
+    }
+
+    return normalizedManagerProfile(data.data as ManagerBusinessProfile);
+  }
+
   const data = await managerProfileRequest(authToken, {
     method: "PUT",
     body: JSON.stringify(payload),
   });
-  return data.data as ManagerBusinessProfile;
+  return normalizedManagerProfile(data.data as ManagerBusinessProfile);
 }
 
 export async function logoutUser(authToken: string) {

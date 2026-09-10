@@ -38,7 +38,15 @@
           }
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow J-Hopping to choose a profile picture for your manager account.",
+          "cameraPermission": "Allow J-Hopping to take a profile picture for your manager account.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

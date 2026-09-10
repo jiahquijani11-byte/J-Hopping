@@ -62,7 +62,9 @@ try {
             destination_managers.business_name AS manager_business_name,
             destination_managers.middle_name AS manager_middle_name,
             destination_managers.last_name AS manager_last_name,
-            destination_managers.extension_name AS manager_extension_name
+            destination_managers.extension_name AS manager_extension_name,
+            destination_managers.profile_picture AS manager_profile_picture,
+            destination_managers.updated_at AS manager_updated_at
          FROM users
          LEFT JOIN user_personal_information
             ON user_personal_information.user_id = users.id
@@ -103,6 +105,9 @@ try {
             'id' => $user['id'],
             'authToken' => $authToken,
             'businessName' => $user['manager_business_name'] ?? null,
+            'profilePictureUrl' => $user['manager_profile_picture']
+                ? 'manager-profile-image.php?v=' . rawurlencode($user['manager_updated_at'])
+                : null,
             'firstName' => $user['first_name'] ?? $user['manager_first_name'],
             'middleInitial' => $user['middle_initial']
                 ?? ($user['manager_middle_name'] !== null && $user['manager_middle_name'] !== ''

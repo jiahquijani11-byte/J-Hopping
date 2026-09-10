@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -25,6 +27,12 @@ import {
   updateDestinationManager,
 } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
+import {
+  commitManagerProfileImage,
+  discardStagedProfileImage,
+  stageManagerProfileImage,
+  type StagedProfileImage,
+} from "../../lib/profile-image";
 import { toTitleCase } from "../../lib/text";
 import { SuccessModal } from "../SuccessModal";
 
@@ -57,11 +65,17 @@ const CREATE_STEPS = [
   { fields: ["username", "password", "confirmPassword"] as FieldName[], title: "Account Details" },
 ];
 
+const MANAGER_PROFILE_STEPS = [
+  ...CREATE_STEPS,
+  { fields: [] as FieldName[], title: "Profile Picture" },
+];
+
 const OPTIONAL_FIELDS: FieldName[] = ["middleName", "extensionName"];
 
 export function DestinationManagerForm({ managerId, selfService = false }: { managerId?: number; selfService?: boolean }) {
   const { updateUser, user } = useAuth();
   const isEditing = managerId !== undefined || selfService;
+  const steps = selfService ? MANAGER_PROFILE_STEPS : CREATE_STEPS;
   const [form, setForm] = useState<FormValues>(EMPTY_FORM);
   const [errors, setErrors] = useState<Partial<Record<FieldName, string>>>({});
   const [isLoading, setIsLoading] = useState(isEditing);
@@ -70,7 +84,21 @@ export function DestinationManagerForm({ managerId, selfService = false }: { man
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [imageError, setImageError] = useState("");
+  const [profilePictureUri, setProfilePictureUri] = useState(
+    user?.profilePictureCacheUri || user?.profilePictureUrl || null,
+  );
+  const [failedPreviewUri, setFailedPreviewUri] = useState<string | null>(null);
+  const [stagedProfileImage, setStagedProfileImage] = useState<StagedProfileImage | null>(null);
+  const stagedProfileImageRef = useRef<StagedProfileImage | null>(null);
   const [step, setStep] = useState(1);
+
+  useEffect(
+    () => () => {
+      discardStagedProfileImage(stagedProfileImageRef.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!managerId && !selfService) return;
@@ -97,6 +125,9 @@ export function DestinationManagerForm({ managerId, selfService = false }: { man
           confirmPassword: "",
           status: "status" in manager ? (manager.status as ManagerStatus) : "active",
         });
+        if (selfService && "profilePictureUrl" in manager && manager.profilePictureUrl) {
+          setProfilePictureUri(user?.profilePictureCacheUri || manager.profilePictureUrl);
+        }
       })
       .catch((error) => {
         setFormError(error instanceof Error ? error.message : "Unable to load manager.");
@@ -108,7 +139,7 @@ export function DestinationManagerForm({ managerId, selfService = false }: { man
     return () => {
       active = false;
     };
-  }, [managerId, selfService, user?.authToken]);
+  }, [managerId, selfService, user?.authToken, user?.profilePictureCacheUri]);
 
   const updateField = (field: FieldName, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -179,10 +210,51 @@ export function DestinationManagerForm({ managerId, selfService = false }: { man
   };
 
   const handleNext = () => {
-    const currentStep = CREATE_STEPS[step - 1];
+    const currentStep = steps[step - 1];
 
     if (validate(currentStep.fields)) {
-      setStep((currentStepNumber) => Math.min(currentStepNumber + 1, CREATE_STEPS.length));
+      setStep((currentStepNumber) => Math.min(currentStepNumber + 1, steps.length));
+    }
+  };
+
+  const chooseProfileImage = async (source: "camera" | "library") => {
+    setImageError("");
+
+    try {
+      const permission = source === "camera"
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (!permission.granted) {
+        setImageError(
+          source === "camera"
+            ? "Camera permission is required to take a photo."
+            : "Photo permission is required to choose an image.",
+        );
+        return;
+      }
+
+      const options: ImagePicker.ImagePickerOptions = {
+        allowsEditing: true,
+        aspect: [1, 1],
+        base64: false,
+        mediaTypes: ["images"],
+        quality: 0.9,
+      };
+      const result = source === "camera"
+        ? await ImagePicker.launchCameraAsync(options)
+        : await ImagePicker.launchImageLibraryAsync(options);
+
+      if (result.canceled || !result.assets[0]) return;
+
+      const stagedImage = await stageManagerProfileImage(result.assets[0], user!.id);
+      discardStagedProfileImage(stagedProfileImageRef.current);
+      stagedProfileImageRef.current = stagedImage;
+      setStagedProfileImage(stagedImage);
+      setProfilePictureUri(stagedImage.uri);
+      setFailedPreviewUri(null);
+    } catch (error) {
+      setImageError(error instanceof Error ? error.message : "Unable to prepare the selected image.");
     }
   };
 
@@ -212,16 +284,36 @@ export function DestinationManagerForm({ managerId, selfService = false }: { man
 
     try {
       if (selfService) {
-        const updatedProfile = await updateManagerBusinessProfile(user!.authToken, {
-          firstName: payload.firstName,
-          middleName: payload.middleName,
-          lastName: payload.lastName,
-          extensionName: payload.extensionName,
-          email: payload.email,
-          contactNumber: payload.contactNumber,
-          username: payload.username,
-          password: payload.password,
-        });
+        const updatedProfile = await updateManagerBusinessProfile(
+          user!.authToken,
+          {
+            firstName: payload.firstName,
+            middleName: payload.middleName,
+            lastName: payload.lastName,
+            extensionName: payload.extensionName,
+            email: payload.email,
+            contactNumber: payload.contactNumber,
+            username: payload.username,
+            password: payload.password,
+          },
+          stagedProfileImage,
+        );
+        let profilePictureCacheUri = user?.profilePictureCacheUri ?? null;
+
+        if (stagedProfileImage) {
+          try {
+            profilePictureCacheUri = await commitManagerProfileImage(
+              stagedProfileImage,
+              user?.profilePictureCacheUri,
+            );
+          } catch {
+            discardStagedProfileImage(stagedProfileImage);
+          }
+
+          stagedProfileImageRef.current = null;
+          setStagedProfileImage(null);
+        }
+
         await updateUser({
           businessName: updatedProfile.businessName,
           firstName: updatedProfile.firstName,
@@ -230,6 +322,8 @@ export function DestinationManagerForm({ managerId, selfService = false }: { man
           extensionName: updatedProfile.extensionName,
           email: updatedProfile.email,
           username: updatedProfile.username,
+          profilePictureCacheUri,
+          profilePictureUrl: updatedProfile.profilePictureUrl,
         });
         setShowSuccess(true);
       } else if (managerId) {
@@ -393,8 +487,8 @@ export function DestinationManagerForm({ managerId, selfService = false }: { man
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <View style={styles.stepIndicator} accessibilityLabel={`Step ${step} of ${CREATE_STEPS.length}`}>
-              {CREATE_STEPS.map((createStep, index) => {
+            <View style={styles.stepIndicator} accessibilityLabel={`Step ${step} of ${steps.length}`}>
+              {steps.map((createStep, index) => {
                 const stepNumber = index + 1;
                 const active = stepNumber === step;
                 const complete = stepNumber < step;
@@ -415,7 +509,7 @@ export function DestinationManagerForm({ managerId, selfService = false }: { man
             <View style={styles.sectionLabel}>
               <View style={styles.dot} />
               <Text style={styles.sectionText}>
-                {CREATE_STEPS[step - 1].title.toUpperCase()}
+                {steps[step - 1].title.toUpperCase()}
               </Text>
             </View>
 
@@ -452,6 +546,51 @@ export function DestinationManagerForm({ managerId, selfService = false }: { man
               </>
             ) : null}
 
+            {selfService && step === 4 ? (
+              <View style={styles.profilePictureSection}>
+                <View style={styles.profilePicturePreview}>
+                  {profilePictureUri && failedPreviewUri !== profilePictureUri ? (
+                    <Image
+                      onError={() => setFailedPreviewUri(profilePictureUri)}
+                      source={
+                        profilePictureUri.startsWith("file:")
+                          ? { uri: profilePictureUri }
+                          : {
+                              headers: { Authorization: `Bearer ${user?.authToken}` },
+                              uri: profilePictureUri,
+                            }
+                      }
+                      style={styles.profilePictureImage}
+                    />
+                  ) : (
+                    <Ionicons color="#0B4F6C" name="person-outline" size={48} />
+                  )}
+                </View>
+                <Text style={styles.profilePictureHint}>
+                  PNG, WEBP, JPG, or JPEG. Maximum file size is 5 MB.
+                </Text>
+                <View style={styles.photoActions}>
+                  <Pressable
+                    disabled={isSaving}
+                    onPress={() => chooseProfileImage("camera")}
+                    style={[styles.photoButton, isSaving && styles.disabled]}
+                  >
+                    <Ionicons color="#0B4F6C" name="camera-outline" size={19} />
+                    <Text style={styles.photoButtonText}>Take Photo</Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={isSaving}
+                    onPress={() => chooseProfileImage("library")}
+                    style={[styles.photoButton, isSaving && styles.disabled]}
+                  >
+                    <Ionicons color="#0B4F6C" name="images-outline" size={19} />
+                    <Text style={styles.photoButtonText}>Choose Photo</Text>
+                  </Pressable>
+                </View>
+                {imageError ? <Text style={styles.imageError}>{imageError}</Text> : null}
+              </View>
+            ) : null}
+
             {isEditing && !selfService && step === 3 ? (
               <View style={styles.field}>
                 <Text style={styles.fieldLabel}>ACCOUNT STATUS</Text>
@@ -486,14 +625,14 @@ export function DestinationManagerForm({ managerId, selfService = false }: { man
               </Pressable>
               <Pressable
                 disabled={isSaving}
-                onPress={step === CREATE_STEPS.length ? handleSubmit : handleNext}
+                onPress={step === steps.length ? handleSubmit : handleNext}
                 style={[styles.primaryButton, styles.stepButton, isSaving && styles.disabled]}
               >
                 {isSaving ? (
                   <ActivityIndicator color="#1A1A1A" />
                 ) : (
                   <Text style={styles.primaryText}>
-                    {step === CREATE_STEPS.length
+                    {step === steps.length
                       ? selfService
                         ? "Save Changes"
                         : isEditing
@@ -587,6 +726,35 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   passwordNoteText: { color: "#28546A", flex: 1, fontSize: 12, lineHeight: 17 },
+  profilePictureSection: { alignItems: "center", gap: 14 },
+  profilePicturePreview: {
+    alignItems: "center",
+    backgroundColor: "#EAF5FB",
+    borderColor: "#B3D9F0",
+    borderRadius: 64,
+    borderWidth: 1,
+    height: 128,
+    justifyContent: "center",
+    overflow: "hidden",
+    width: 128,
+  },
+  profilePictureImage: { height: "100%", width: "100%" },
+  profilePictureHint: { color: "#666666", fontSize: 12, lineHeight: 17, textAlign: "center" },
+  photoActions: { flexDirection: "row", gap: 10, width: "100%" },
+  photoButton: {
+    alignItems: "center",
+    borderColor: "#B3D9F0",
+    borderRadius: 4,
+    borderWidth: 1,
+    flex: 1,
+    flexDirection: "row",
+    gap: 7,
+    justifyContent: "center",
+    minHeight: 46,
+    paddingHorizontal: 8,
+  },
+  photoButtonText: { color: "#0B4F6C", fontSize: 13, fontWeight: "600" },
+  imageError: { color: "#C0392B", fontSize: 12, textAlign: "center" },
   inputError: { borderColor: "#C0392B" },
   errorText: { color: "#C0392B", fontSize: 12 },
   segmented: { backgroundColor: "#F7F8F9", borderRadius: 4, flexDirection: "row", padding: 3 },

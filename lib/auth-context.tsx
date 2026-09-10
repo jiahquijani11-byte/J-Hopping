@@ -7,6 +7,8 @@ export type AuthUser = {
   id: number;
   authToken: string;
   businessName?: string | null;
+  profilePictureCacheUri?: string | null;
+  profilePictureUrl?: string | null;
   firstName: string | null;
   middleInitial?: string | null;
   lastName: string | null;
